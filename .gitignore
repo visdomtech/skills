@@ -1,0 +1,7 @@
+.idea
+**/cache/*
+.vscode
+*.html
+.claude/settings.local.json
+.DS_Store
+*.pyc
