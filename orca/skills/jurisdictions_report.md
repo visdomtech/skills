@@ -285,12 +285,12 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 
 ## Automated Script
 
-A Python script at `orca/scripts/generate_report.py` automates Steps 2 and 3 (analysis + HTML generation).
+A Python script at `orca/scripts/generate_jurisdictions_report.py` automates Steps 2 and 3 (analysis + HTML generation).
 
 ### Usage
 
 ```bash
-python3 orca/scripts/generate_report.py <path_to_cache_or_raw_json> [output_file]
+python3 orca/scripts/generate_jurisdictions_report.py <path_to_cache_or_raw_json> [output_file]
 ```
 
 **Parameters:**
@@ -304,7 +304,7 @@ python3 orca/scripts/generate_report.py <path_to_cache_or_raw_json> [output_file
 # (call list_jurisdictions MCP tool, save output to orca/scripts/data.json)
 
 # 2. Generate the report
-python3 orca/scripts/generate_report.py orca/scripts/data.json
+python3 orca/scripts/generate_jurisdictions_report.py orca/scripts/data.json
 
 # 3. Open the report
 open jurisdictions_report.html
