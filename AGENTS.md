@@ -15,5 +15,5 @@ When using skills for a service, always include and respect the `AGENTS.md` file
 When a user's prompt is formatted like `[service]: question text`, the system should:
 
 1. **Load Service AGENTS.md**: First load and respect the `AGENTS.md` file from the directory `[service]/`
-2. **Search Existing Skills**: Look for existing skill files in the `[service]/` directory that can handle the task
+2. **Search Existing Skills**: Look for existing skill Markdown files inside the `[service]/skills/` directory that can handle or related to the task
 3. **Check MCP Tools**: If no existing skills are found, check the MCP tools' definitions from the MCP server named `[service]` to determine available capabilities
