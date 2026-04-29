@@ -102,6 +102,7 @@ python3 orca/scripts/send_email.py \
 
 ## Important notes
 
-1. **HTML email body vs. attachment:** If the file is an HTML email template (like a law changes report), prefer sending it as the `html` body (`--html` flag) rather than as an attachment — it renders directly in email clients.
-2. **MIME types:** The script auto-detects MIME type from the file extension. Unknown extensions fall back to `application/octet-stream`.
-3. **Sender address:** Default sender is `warren@doublefin.ai`. Override with `--from`.
+1. **Always use the script for attachments** — never manually base64-encode files with shell tools (e.g. `base64 -i`). The script handles encoding correctly; manual encoding leads to truncated or invalid data passed to the MCP tool.
+2. **HTML email body vs. attachment:** If the file is an HTML email template (like a law changes report), prefer sending it as the `html` body (`--html` flag) rather than as an attachment — it renders directly in email clients.
+3. **MIME types:** The script auto-detects MIME type from the file extension. Unknown extensions fall back to `application/octet-stream`.
+4. **Sender address:** Default sender is `warren@doublefin.ai`. Override with `--from`.

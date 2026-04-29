@@ -12,6 +12,20 @@ The `orca/` directory contains skill files designed to work with the **Orca MCP 
 
 Do not attempt to work around a missing Orca MCP server by using alternative tools or fallback approaches.
 
+## Skills
+
+Before calling any MCP tool directly, **always check `orca/skills/` for an existing skill file** that covers the task. Skills encapsulate the correct workflow and must be followed — they often use helper scripts that handle details (e.g. base64 encoding for attachments) that are easy to get wrong when calling MCP tools directly.
+
+| Task | Skill file |
+|---|---|
+| Send email (with or without attachments) | `orca/skills/send_email.md` |
+| Generate jurisdictions data quality report | `orca/skills/jurisdictions_report.md` |
+| Generate law changes report | `orca/skills/law_changes_report.md` |
+
+If a skill file exists for the task, read and follow it instead of improvising with raw MCP calls.
+
+---
+
 ## MCP Tools
 
 ### Jurisdictions & Regulations

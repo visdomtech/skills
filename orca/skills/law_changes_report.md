@@ -115,3 +115,4 @@ The generated HTML report contains these sections:
    - Monitor: no effective date or >90 days out
    - Within each bucket, items are grouped by jurisdiction + theme; narratives are synthesized from summaries, bill numbers, wage amounts, and comment deadlines
 6. Cache responses per Orca caching policy (24-hour expiration)
+7. **To email the report** — follow `orca/skills/send_email.md`. Use `--html` to send as the email body (renders inline in Gmail), or `--attach` to send as a file attachment, or both.

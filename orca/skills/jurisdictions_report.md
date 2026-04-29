@@ -281,7 +281,7 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 
 - Be opened in a web browser for preview.
 - Be copied and pasted into a Gmail compose window (the inline styles and table layout ensure it renders correctly).
-- Be attached or sent via the Orca `send_email` tool if needed.
+- Be sent via email — **follow `orca/skills/send_email.md`** for the correct workflow. Use `--html` to send the report as the email body, or `--attach` to send it as a file attachment (or both).
 
 ## Automated Script
 
