@@ -21,6 +21,7 @@ Before calling any MCP tool directly, **always check `orca/skills/` for an exist
 | Send email (with or without attachments) | `orca/skills/send_email.md` |
 | Generate jurisdictions data quality report | `orca/skills/jurisdictions_report.md` |
 | Generate law changes report | `orca/skills/law_changes_report.md` |
+| Generate document-to-RAG-file matching report | `orca/skills/document_rag_file_report.md` |
 
 If a skill file exists for the task, read and follow it instead of improvising with raw MCP calls.
 
