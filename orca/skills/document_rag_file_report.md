@@ -153,50 +153,38 @@ After reviewing the report, resolve all documents that need `rag_file_name` upda
 
 ### Batch Update Workflow
 
-The `set_rag_file_name` MCP tool only supports single-document updates. To process multiple documents efficiently:
+The `set_rag_file_name` MCP tool supports batch updates via the `entries` array. To process multiple documents efficiently:
 
 1. **Extract the list of documents to update** from the report or the script's intermediate output.
-2. **Loop over the list** in batches of 10–20 documents per iteration.
-3. **Call `set_rag_file_name`** for each document:
+2. **Prepare a JSON payload** with `workspaceId` and an `entries` array containing objects with `documentId` and `ragFileName`.
+3. **Call `set_rag_file_name`** with batches of at least 100 entries:
 
 ```json
 {
   "workspaceId": 1,
-  "documentId": 780,
-  "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5685605325190625475"
+  "entries": [
+    {
+      "documentId": 780,
+      "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5685605325190625475"
+    },
+    {
+      "documentId": 718,
+      "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5685605197563873605"
+    }
+    // ... up to 100+ entries per call
+  ]
 }
 ```
 
-4. **Monitor progress**: Track successful updates and log any errors.
+4. **Monitor progress**: Track successful updates (returned as `{"updated": N}`) and log any errors.
 
 ### Recommended Approach
 
-For large datasets (1000+ documents), consider writing a small Python script that:
+For large datasets (1000+ documents), use a Python script that:
 - Reads the list of documents to update from a JSON file.
-- Calls the `set_rag_file_name` MCP tool in a loop with a delay between calls (e.g., 0.5 seconds) to avoid rate limiting.
+- Groups them into batches of 100 or more.
+- Calls the `set_rag_file_name` MCP tool for each batch.
 - Logs progress and errors to a file.
-
-Example pseudo-code:
-```python
-import time
-import json
-
-with open("documents_to_update.json") as f:
-    updates = json.load(f)
-
-for i, doc in enumerate(updates):
-    # Call set_rag_file_name MCP tool
-    result = call_mcp_tool("set_rag_file_name", {
-        "workspaceId": doc["workspaceId"],
-        "documentId": doc["documentId"],
-        "ragFileName": doc["ragFileName"]
-    })
-    
-    if i % 10 == 0:
-        print(f"Processed {i+1}/{len(updates)} documents")
-    
-    time.sleep(0.5)  # Rate limiting
-```
 
 ---
 
@@ -294,5 +282,5 @@ The script handles all analysis logic — matching documents to RAG files, class
 1. Always match documents to RAG files by comparing `document.filename` with `rag_file.displayName`.
 2. Use the script to automate analysis and report generation; do not manually inspect large datasets.
 3. The HTML report is designed for Gmail compatibility — use inline CSS and table-based layouts.
-4. Batch resolution requires looping over individual `set_rag_file_name` calls; implement rate limiting for large datasets.
+4. Batch resolution should use the `entries` array in `set_rag_file_name` with batches of at least 100 documents for efficiency.
 5. Cache all MCP tool responses to avoid redundant API calls and improve performance.
