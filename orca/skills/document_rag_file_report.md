@@ -200,6 +200,57 @@ for i, doc in enumerate(updates):
 
 ---
 
+## Step 5: Verification
+
+After completing the batch updates, verify that all `rag_file_name` values were properly set.
+
+### 5.1 Re-fetch Documents
+
+Call `list_documents` again with the same `workspaceId` and `repositoryId`:
+
+```json
+{
+  "workspaceId": 1,
+  "repositoryId": 6,
+  "limit": 10000
+}
+```
+
+**Cache the new response** as a new cache file (e.g., `orca_cache_{new_hash}.json`) to avoid overwriting the pre-update data. This allows you to keep both the before and after snapshots for comparison.
+
+### 5.2 Re-run the Report Script
+
+Generate a new report using the updated documents cache and the original RAG files cache:
+
+```bash
+python3 orca/scripts/generate_document_rag_file_report.py \
+  orca/cache/orca_cache_{new_docs_hash}.json \
+  orca/cache/orca_cache_970ee63a14ba2333.json \
+  document_rag_file_report_verification.html
+```
+
+### 5.3 Verify Results
+
+Open the new report and confirm the following:
+
+| Metric | Before Update | After Update | Expected Change |
+|--------|---------------|--------------|-----------------|
+| **Matched — Empty/Null** | N | 0 | Should be zero |
+| **Matched — Different** | M | 0 | Should be zero |
+| **Matched — Correct** | C | C + N + M | Should increase by the number of documents updated |
+| **Unmatched** | U | U | Should remain unchanged |
+
+### 5.4 Handle Discrepancies
+
+If any documents still appear in the "Empty/Null" or "Different" categories after verification:
+
+1. **Check for API failures**: Review logs from the batch update process for any `set_rag_file_name` errors.
+2. **Check for rate limiting**: If errors mention rate limiting or timeouts, retry the updates with a longer delay between calls.
+3. **Check for concurrent modifications**: Another process may have modified the documents between your update and verification fetches. Re-fetch and re-verify.
+4. **Investigate edge cases**: Documents with special characters in filenames or very long filenames may fail silently. Manually inspect any remaining mismatches.
+
+---
+
 ## Automated Script
 
 The Python script at `orca/scripts/generate_document_rag_file_report.py` automates Steps 2 and 3 (analysis + HTML generation).
@@ -210,16 +261,28 @@ The Python script at `orca/scripts/generate_document_rag_file_report.py` automat
 # 1. Fetch data via MCP tools and save to cache files
 # (call list_rag_files, list_documents, etc., save outputs to orca/cache/)
 
-# 2. Generate the report
+# 2. Generate the initial report
 python3 orca/scripts/generate_document_rag_file_report.py \
   orca/cache/orca_cache_1121a24f496f7fbc.json \
   orca/cache/orca_cache_970ee63a14ba2333.json
 
-# 3. Open the report
+# 3. Open the initial report
 open document_rag_file_report.html
 
 # 4. Review the report and extract documents needing updates
 # 5. Run batch updates using the recommended workflow above
+
+# 6. Re-fetch documents to verify updates
+# (call list_documents again, save to a new cache file)
+
+# 7. Generate verification report
+python3 orca/scripts/generate_document_rag_file_report.py \
+  orca/cache/orca_cache_{new_docs_hash}.json \
+  orca/cache/orca_cache_970ee63a14ba2333.json \
+  document_rag_file_report_verification.html
+
+# 8. Open and review the verification report
+open document_rag_file_report_verification.html
 ```
 
 The script handles all analysis logic — matching documents to RAG files, classifying by status, computing summary statistics, and generating the full Gmail-compatible HTML report with inline styles.
