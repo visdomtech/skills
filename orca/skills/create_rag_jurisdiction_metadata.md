@@ -2,17 +2,17 @@
 
 ## Overview
 
-This skill describes how to create `jurisdiction_code` metadata for RAG files by matching included regulations to their corresponding documents in the Compliance Repository. This ensures that RAG search results can be filtered or boosted by jurisdiction.
+Creates `jurisdiction_code` metadata for RAG files by matching included regulations to documents in the Compliance Repository. This enables jurisdiction-based filtering and boosting in RAG search results.
 
 ## Prerequisites
 
-- Access to the Orca MCP server
-- MCP Python SDK installed: `pip install mcp`
-- MCP server configuration JSON file (see Step 1)
-- The following tools used by the script: `list_regulations`, `list_documents`, `create_rag_metadata`, `update_rag_metadata`, `list_rag_metadata`
-- Well-known data: Workspace 1, Compliance Repository ID 6
+- Orca MCP server access
+- MCP Python SDK: `pip install mcp`
+- MCP config JSON (see Step 1)
+- Tools used: `list_regulations`, `list_documents`, `create_rag_metadata`, `update_rag_metadata`, `list_rag_metadata`
+- Workspace 1, Compliance Repository ID 6
 
-## Step 1: Prepare MCP Configuration
+## Step 1: Prepare MCP Config
 
 Create a JSON file with your MCP server configuration:
 
@@ -26,48 +26,32 @@ Create a JSON file with your MCP server configuration:
 }
 ```
 
-Save this file (e.g., `orca/assets/mcp_config.json`). **Never commit API keys to version control.**
+Save as `orca/assets/mcp_config.json`. **Never commit API keys.**
 
 ## Step 2: Run the Script
 
-The script `orca/scripts/create_rag_jurisdiction_metadata.py` performs the entire workflow automatically:
+The script automates the entire workflow:
 
-1. Fetches included regulations via `list_regulations`
-2. Fetches compliance documents via `list_documents`
+1. Fetches included regulations (`list_regulations`)
+2. Fetches compliance documents (`list_documents`)
 3. Matches regulations to documents by filename
-4. Creates intermediate batch files in `orca/cache/` for debugging
-5. Processes each match by checking existing metadata and creating/updating as needed
-6. Handles false negative INTERNAL errors by verifying after each operation
-7. Tracks progress for checkpoint-based resumption
+4. Saves intermediate batch files to `orca/assets/`
+5. Creates/updates `jurisdiction_code` metadata with verification
+6. Handles false-negative INTERNAL errors
+7. Tracks progress for checkpoint resumption
 
-### Script Usage
+### Usage
 
 ```bash
 python3 orca/scripts/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
 ```
 
 **Parameters:**
-- `--config` (required): Path to the MCP server configuration JSON file.
+- `--config` (required): Path to MCP config JSON.
 
-### What the Script Does
+## Step 3: Checkpoint Resumption
 
-The script performs the following steps automatically:
-
-1. **Fetch Data**: Calls `list_regulations` and `list_documents` to get current state
-2. **Match Regulations**: Filters for `included: true` regulations and matches them to documents by filename
-3. **Generate Batches**: Saves intermediate batch files to `orca/assets/` (for debugging/audit trail)
-4. **Process Metadata**: For each match:
-   - Checks if `jurisdiction_code` metadata already exists via `list_rag_metadata`
-   - If missing: calls `create_rag_metadata`
-   - If exists with different value: calls `update_rag_metadata`
-   - If exists with same value: skips
-   - Verifies result immediately after create/update
-5. **Handle Errors**: Detects false negative INTERNAL errors and verifies success anyway
-6. **Track Progress**: Updates progress file after each batch to enable resume
-
-## Step 3: Checkpoint-Based Resumption
-
-The script automatically tracks progress in `orca/assets/rag_meta_batch_progress.json`:
+Progress is tracked in `orca/assets/rag_meta_batch_progress.json`:
 
 ```json
 {
@@ -79,112 +63,90 @@ The script automatically tracks progress in `orca/assets/rag_meta_batch_progress
 }
 ```
 
-**Resume Behavior:**
-- If interrupted, simply re-run the same command
-- The script reads `current_batch` and `current_batch_index` to determine where to resume
-- It skips all batch files before `current_batch`, then starts processing that batch from `current_batch_index`
-- Progress is updated every 10 entries to minimize data loss on interruption
-- When a batch completes, `current_batch_index` resets to 0 and advances to the next batch file
+**Resume behavior:**
+- Re-run the same command after interruption
+- Skips completed batches, resumes at `current_batch_index`
+- Progress saved every 10 entries
+- Index resets to 0 when advancing to next batch
 
 ## Error Handling
 
-### False Negative INTERNAL Errors
+### False-Negative INTERNAL Errors
 
-The `create_rag_metadata` tool frequently returns `INTERNAL` errors even when the operation succeeds. The script handles this by:
+`create_rag_metadata` often returns `INTERNAL` errors even on success. The script:
 
-1. Detecting INTERNAL errors in the response
-2. Immediately calling `list_rag_metadata` to verify
-3. If metadata appears in the verification, treating it as success
-4. Logging as "Created & Verified (false negative handled)"
+1. Detects INTERNAL errors
+2. Verifies via `list_rag_metadata`
+3. Treats as success if metadata appears
+4. Logs as "Created & Verified (false negative)"
 
-### Metadata Decision Logic
+### Decision Logic
 
-Before writing metadata, the script always checks existing state:
+Before writing, the script checks existing state:
 
-- **Key missing** → Call `create_rag_metadata`
-- **Key exists, value matches** → Skip (no action needed)
-- **Key exists, value differs** → Call `update_rag_metadata`
+- **Key missing** → `create_rag_metadata`
+- **Key matches** → Skip
+- **Key differs** → `update_rag_metadata`
 
-This prevents timeout errors from attempting to create metadata on an existing key.
+This prevents timeout errors from duplicate creates.
 
-### Verification Pattern
+### Verification
 
-After every create/update operation, the script immediately verifies by calling `list_rag_metadata` and comparing the result to the expected value. This ensures data integrity.
+Every create/update is verified immediately via `list_rag_metadata`.
 
 ## Verification
 
-After the script completes, verify results:
-
 ### Sample Check
 
-Pick a few RAG file names and call `list_rag_metadata` to confirm the `jurisdiction_code` is present:
-
-```bash
-# Use MCP tool directly or another script
-# Call list_rag_metadata for specific ragFileNames
-```
+Call `list_rag_metadata` for a few RAG files to confirm `jurisdiction_code` exists.
 
 ### Count Validation
 
-Compare the number of successfully processed entries reported by the script with the total number of matched regulations. They should be equal (minus any legitimate failures).
+Compare processed entries to total matched regulations (minus legitimate failures).
 
-### Intermediate Batch Files
+### Batch Files
 
-The script saves intermediate batch files to `orca/cache/` for debugging and audit purposes. These can be inspected to verify the matching logic was correct.
+Intermediate batches in `orca/assets/` can be inspected to verify matching logic.
 
-## End-to-End Workflow
+## Workflow
 
 ```bash
-# 1. Create MCP config file (one-time setup)
+# 1. Create MCP config (one-time)
 cat > orca/assets/mcp_config.json <<EOF
 {
   "type": "http",
   "url": "https://orcaservices-360095844563.us-central1.run.app",
-  "headers": {
-    "X-API-KEY": "your-api-key-here"
-  }
+  "headers": {"X-API-KEY": "your-api-key-here"}
 }
 EOF
 
-# 2. Install MCP SDK (if not already installed)
+# 2. Install SDK
 pip install mcp
 
-# 3. Run the metadata creation script
+# 3. Run script
 python3 orca/scripts/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
 
-# 4. If interrupted, simply re-run the same command (checkpoint resume)
+# 4. Resume if interrupted (same command)
 python3 orca/scripts/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
-
-# 5. Verify a sample entry
-# (call list_rag_metadata for a specific ragFileName)
 ```
 
-### Script Output
+### Output
 
-The script prints progress information:
-- Number of included regulations found
-- Number of document matches
-- Batch processing progress
-- Success/failure counts per batch
-- Final summary with success rate and failure details
-
-## Related Scripts
-
-### bulk_create_rag_metadata.py
-
-Legacy script for processing pre-generated batch files. The new `create_rag_jurisdiction_metadata.py` replaces this workflow by integrating data fetching, matching, and processing into a single script.
-
-For detailed documentation on the legacy approach, see `orca/scripts/BULK_PROCESSING_GUIDE.md`.
+The script prints:
+- Included regulations found
+- Document matches
+- Batch progress
+- Final summary with success rate
 
 ## Key Takeaways
 
-1. **Use MCP SDK for efficiency**: The script calls MCP tools directly via the Python SDK, avoiding agent token costs and reasoning overhead for batch operations.
-2. **Only process included regulations**: The script filters for `included: true` to avoid metadata on irrelevant files.
-3. **Checkpoint-based resumption**: Progress tracks batch file name and index position. If interrupted, simply re-run the same command to resume from the exact position.
-4. **Handle false negatives**: The script detects INTERNAL errors and verifies success via `list_rag_metadata` to handle false negative responses from `create_rag_metadata`.
-5. **Verify-as-you-go**: Every create/update operation is immediately verified to ensure data integrity.
-6. **Avoid duplicate writes**: The script checks existing metadata before writing to prevent timeout errors from creating metadata on an existing key.
-7. **Intermediate batch files**: Batch files are saved to `orca/assets/` for debugging and audit purposes.
-8. **Batch size optimized**: Uses batch size of 100 for optimal performance with `create_rag_metadata` operations.
-9. **Always validate**: Review the final summary and spot-check failed entries to ensure completeness.
-10. **Batch files as work units**: Intermediate batch files in `orca/assets/` are the primary processing units, enabling easy inspection and debugging of the matching logic.
+1. **MCP SDK efficiency**: Direct tool calls avoid agent overhead
+2. **Included regulations only**: Filters `included: true`
+3. **Checkpoint resumption**: Batch name + index tracking
+4. **False-negative handling**: Verifies INTERNAL errors
+5. **Verify-as-you-go**: Immediate post-operation checks
+6. **No duplicate writes**: Checks before creating
+7. **Batch files in assets**: Debugging and audit trail
+8. **Batch size 100**: Optimized for performance
+9. **Validate results**: Review summary and failures
+10. **Batch files as units**: Easy inspection of matching logic
