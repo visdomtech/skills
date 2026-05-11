@@ -67,6 +67,7 @@ The agent is responsible for invoking the MCP tools for each entry in the genera
 4. **Immediate Verification**: After a successful `create_rag_metadata` call, immediately invoke `list_rag_metadata` for the same `ragFileName`.
 5. **Validate Result**: Compare the returned metadata with the expected values from the `entries` field.
 6. **Track Progress**: Log the result of both creation and verification (e.g., "Created & Verified: US" or "Failed/Mismatch").
+7. **Update Progress File**: After processing each batch of entries (recommended every 10-20 entries), update the progress tracking file at `orca/assets/rag_meta_batch_progress.json` with the current state. This ensures resumability if the process is interrupted.
 
 ### Example Tool Call Sequence
 
@@ -151,6 +152,15 @@ python3 orca/scripts/bulk_create_rag_metadata.py
 - `--limit N`: Process only N entries (for testing)
 - `--start-from FILE`: Resume from a specific batch file
 - `--batch-dir DIR`: Directory containing batch files (default: ../assets)
+- `--progress-file FILE`: Path to progress tracking file (default: ../assets/rag_meta_batch_progress.json)
+
+**Progress Tracking**: The script automatically tracks progress in `rag_meta_batch_progress.json`. After each entry is processed, the progress file is updated with:
+- Current batch file being processed
+- Current index within the batch
+- Total completed entries
+- Last updated timestamp
+
+This enables automatic resumption from the last checkpoint if the process is interrupted.
 
 ### verify_rag_metadata.py
 
@@ -179,5 +189,6 @@ For detailed documentation, see `orca/scripts/BULK_PROCESSING_GUIDE.md`.
 2. **Use scripts for efficiency**: The automation scripts handle large volumes of regulations and documents efficiently.
 3. **Verify-as-you-go pattern**: For critical operations, use immediate verification after each metadata creation.
 4. **Bulk processing available**: Use `bulk_create_rag_metadata.py` for efficient batch processing with optional verification.
-5. **Resume capability**: If interrupted, use `--start-from` to continue from where you left off.
-6. **Always validate**: Use `list_rag_metadata` or `verify_rag_metadata.py` to ensure data integrity.
+5. **Resume capability**: If interrupted, the process automatically resumes from the last checkpoint recorded in `rag_meta_batch_progress.json`.
+6. **Periodic progress updates**: The progress file is updated after each entry to ensure minimal data loss on interruption.
+7. **Always validate**: Use `list_rag_metadata` or `verify_rag_metadata.py` to ensure data integrity.

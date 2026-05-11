@@ -110,7 +110,7 @@ def main():
     )
     parser.add_argument(
         '--batch-dir',
-        default='/Users/jiangzhaohua/codes/visdomtech/skills/orca/assets',
+        default='/Users/jiangzhaohua/codes/visdom/skills/orca/assets',
         help='Directory containing batch JSON files'
     )
     parser.add_argument(
