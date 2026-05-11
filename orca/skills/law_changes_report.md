@@ -56,18 +56,18 @@ python3 orca/scripts/generate_law_changes_report.py <input_json> [output_html] [
 ```
 
 **Parameters:**
-- `input_json` (required): Path to cached response JSON or raw API response
+- `input_json` (required): Path to saved response JSON or raw API response
 - `output_html` (optional): Output file path. Default: `law_changes_report.html`
 - `date_range_label` (optional): Date range text for report header
 
 ### Example Workflow
 
 ```bash
-# 1. Fetch data via MCP tool (cache is saved automatically)
-# 2. Generate report from cache
+# 1. Fetch data via MCP tool (save to orca/assets/)
+# 2. Generate report from saved file
 python3 orca/scripts/generate_law_changes_report.py \
-  orca/cache/orca_cache_<hash>.json \
-  orca/law_changes_report.html \
+  orca/assets/orca_cache_<hash>.json \
+  orca/assets/law_changes_report.html \
   "April 15 - April 28, 2026"
 ```
 
@@ -114,5 +114,5 @@ The generated HTML report contains these sections:
    - Ongoing: already effective (days < 0)
    - Monitor: no effective date or >90 days out
    - Within each bucket, items are grouped by jurisdiction + theme; narratives are synthesized from summaries, bill numbers, wage amounts, and comment deadlines
-6. Cache responses per Orca caching policy (24-hour expiration)
+6. Save responses in `orca/assets/` to facilitate reuse and avoid redundant API calls.
 7. **To email the report** — follow `orca/skills/send_email.md`. Use `--html` to send as the email body (renders inline in Gmail), or `--attach` to send as a file attachment, or both.

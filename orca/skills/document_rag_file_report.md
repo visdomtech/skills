@@ -35,7 +35,7 @@ Call `list_rag_files` with the corpus `name`:
 }
 ```
 
-**Cache the response** in `orca/cache/` per the caching policy in `orca/AGENTS.md`.
+**Save the response** in `orca/assets/`.
 
 ### 1.3 Find Workspace and Repository IDs
 
@@ -61,7 +61,7 @@ Call `list_documents` with the resolved `workspaceId` and `repositoryId`:
 }
 ```
 
-**Cache the response** in `orca/cache/`.
+**Save the response** in `orca/assets/`.
 
 ---
 
@@ -189,8 +189,8 @@ Generate a new report using the updated documents cache and the original RAG fil
 
 ```bash
 python3 orca/scripts/generate_document_rag_file_report.py \
-  orca/cache/orca_cache_{new_docs_hash}.json \
-  orca/cache/orca_cache_970ee63a14ba2333.json \
+  orca/assets/orca_cache_{new_docs_hash}.json \
+  orca/assets/orca_cache_970ee63a14ba2333.json \
   document_rag_file_report_verification.html
 ```
 
@@ -223,31 +223,31 @@ The Python script at `orca/scripts/generate_document_rag_file_report.py` automat
 ### End-to-End Workflow
 
 ```bash
-# 1. Fetch data via MCP tools and save to cache files
-# (call list_rag_files, list_documents, etc., save outputs to orca/cache/)
+# 1. Fetch data via MCP tools and save to assets files
+# (call list_rag_files, list_documents, etc., save outputs to orca/assets/)
 
 # 2. Generate the initial report
 python3 orca/scripts/generate_document_rag_file_report.py \
-  orca/cache/orca_cache_1121a24f496f7fbc.json \
-  orca/cache/orca_cache_970ee63a14ba2333.json
+  orca/assets/orca_cache_1121a24f496f7fbc.json \
+  orca/assets/orca_cache_970ee63a14ba2333.json
 
 # 3. Open the initial report
-open document_rag_file_report.html
+open orca/assets/document_rag_file_report.html
 
 # 4. Review the report and extract documents needing updates
 # 5. Run batch updates using the recommended workflow above
 
 # 6. Re-fetch documents to verify updates
-# (call list_documents again, save to a new cache file)
+# (call list_documents again, save to a new assets file)
 
 # 7. Generate verification report
 python3 orca/scripts/generate_document_rag_file_report.py \
-  orca/cache/orca_cache_{new_docs_hash}.json \
-  orca/cache/orca_cache_970ee63a14ba2333.json \
-  document_rag_file_report_verification.html
+  orca/assets/orca_cache_{new_docs_hash}.json \
+  orca/assets/orca_cache_970ee63a14ba2333.json \
+  orca/assets/document_rag_file_report_verification.html
 
 # 8. Open and review the verification report
-open document_rag_file_report_verification.html
+open orca/assets/document_rag_file_report_verification.html
 ```
 
 The script handles all analysis logic — matching documents to RAG files, classifying by status, computing summary statistics, and generating the full Gmail-compatible HTML report with inline styles.
@@ -261,4 +261,4 @@ The script handles all analysis logic — matching documents to RAG files, class
 3. The generated CSV file provides a direct source for batch updates, eliminating manual data extraction.
 4. The HTML report is designed for Gmail compatibility — use inline CSS and table-based layouts.
 5. Batch resolution should use the `entries` array in `set_rag_file_name` with a batch size of **200** for optimal efficiency.
-6. Cache all MCP tool responses to avoid redundant API calls and improve performance.
+6. Save all MCP tool responses in `orca/assets/` to facilitate reuse and avoid redundant API calls.

@@ -5,7 +5,7 @@ import json, re, os, sys
 from datetime import datetime, timezone
 
 # Paths
-DATA_FILE = sys.argv[1] if len(sys.argv) > 1 else "cache/orca_cache_0dae01819f04613c.json"
+DATA_FILE = sys.argv[1] if len(sys.argv) > 1 else "assets/jurisdictions_report.json"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, sys.argv[2]) if len(sys.argv) > 2 else os.path.join(OUTPUT_DIR, "jurisdictions_report.html")

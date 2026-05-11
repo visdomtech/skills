@@ -1281,7 +1281,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "input",
         nargs="?",
-        default="cache/orca_cache_law_changes.json",
+        default="assets/law_changes_report.json",
         help="Path to cache file or raw API response JSON",
     )
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
