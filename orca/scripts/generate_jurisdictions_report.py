@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 
 # Paths
 DATA_FILE = sys.argv[1] if len(sys.argv) > 1 else "cache/orca_cache_0dae01819f04613c.json"
-OUTPUT_FILE = sys.argv[2] if len(sys.argv) > 2 else "jurisdictions_report.html"
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, sys.argv[2]) if len(sys.argv) > 2 else os.path.join(OUTPUT_DIR, "jurisdictions_report.html")
 
 # Load data
 with open(DATA_FILE, "r") as f:

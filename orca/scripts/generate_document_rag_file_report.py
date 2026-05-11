@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Generate document-to-RAG-file matching report from Orca list_documents and list_rag_files JSON responses."""
 
-import json, os, sys
+import csv, json, os, sys
 from datetime import datetime, timezone
 
 # Paths
 DOCS_FILE = sys.argv[1] if len(sys.argv) > 1 else None
 RAG_FILES = sys.argv[2] if len(sys.argv) > 2 else None
-OUTPUT_FILE = sys.argv[3] if len(sys.argv) > 3 else "document_rag_file_report.html"
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, sys.argv[3]) if len(sys.argv) > 3 else os.path.join(OUTPUT_DIR, "document_rag_file_report.html")
+CSV_OUTPUT_FILE = OUTPUT_FILE.rsplit('.', 1)[0] + '.csv'
 
 if not DOCS_FILE or not RAG_FILES:
     print("Usage: python3 generate_document_rag_file_report.py <path_to_documents_cache> <path_to_rag_files_cache> [output_file]")
@@ -98,6 +101,37 @@ print(f"Matched - Empty/Null: {empty_count}")
 print(f"Matched - Correct: {correct_count}")
 print(f"Matched - Different: {different_count}")
 
+# --- Step 2.5: Generate CSV for Actionable Items ---
+
+actionable_items = []
+for item in matched_empty:
+    actionable_items.append({
+        "document_id": item["document_id"],
+        "filename": item["filename"],
+        "status": "Empty/Null",
+        "current_rag_file_name": item.get("current_rag_file_name", ""),
+        "correct_rag_file_name": item["matching_rag_file_name"]
+    })
+
+for item in matched_different:
+    actionable_items.append({
+        "document_id": item["document_id"],
+        "filename": item["filename"],
+        "status": "Different",
+        "current_rag_file_name": item.get("current_rag_file_name", ""),
+        "correct_rag_file_name": item["matching_rag_file_name"]
+    })
+
+if actionable_items:
+    with open(CSV_OUTPUT_FILE, 'w', newline='') as csvfile:
+        fieldnames = ["document_id", "filename", "status", "current_rag_file_name", "correct_rag_file_name"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(actionable_items)
+    print(f"\nActionable items CSV written to {CSV_OUTPUT_FILE} ({len(actionable_items)} entries)")
+else:
+    print("\nNo actionable items found. CSV not generated.")
+
 # --- Step 3: Generate HTML ---
 
 def status_badge(status):
@@ -113,8 +147,6 @@ def status_badge(status):
 def truncate(text, max_len=60):
     if not text:
         return ""
-    if len(text) > max_len:
-        return text[:max_len] + "..."
     return text
 
 def render_table_rows(items, columns, show_current_rag=True, show_matching_rag=True):

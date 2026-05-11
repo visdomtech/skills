@@ -78,7 +78,7 @@ python3 orca/scripts/generate_document_rag_file_report.py <path_to_documents_cac
 **Parameters:**
 - `path_to_documents_cache` (required): Path to the cached `list_documents` JSON response.
 - `path_to_rag_files_cache` (required): Path to the cached `list_rag_files` JSON response.
-- `output_file` (optional): Output HTML file path. Defaults to `document_rag_file_report.html`.
+- `output_file` (optional): Output HTML file path. Defaults to `document_rag_file_report.html`. A corresponding CSV file (`document_rag_file_report.csv`) will also be generated containing all actionable items.
 
 ### Matching Logic
 
@@ -96,6 +96,7 @@ The script performs the following analysis:
 | **Matched — Different** | A matching RAG file exists, but `document.rag_file_name` is set to a different value. |
 
 4. **Generate summary statistics**: Total counts and percentages for each category.
+5. **Export actionable items**: A CSV file is automatically generated containing all documents with "Empty/Null" or "Different" statuses, ready for batch processing.
 
 ---
 
@@ -153,38 +154,14 @@ After reviewing the report, resolve all documents that need `rag_file_name` upda
 
 ### Batch Update Workflow
 
-The `set_rag_file_name` MCP tool supports batch updates via the `entries` array. To process multiple documents efficiently:
+The skill provides a dedicated script `orca/scripts/batch_update_rag_file_name.py` to handle the batch update process efficiently. This script reads the generated CSV and calls `set_rag_file_name` in optimized batches.
 
-1. **Extract the list of documents to update** from the report or the script's intermediate output.
-2. **Prepare a JSON payload** with `workspaceId` and an `entries` array containing objects with `documentId` and `ragFileName`.
-3. **Call `set_rag_file_name`** with batches of at least 100 entries:
-
-```json
-{
-  "workspaceId": 1,
-  "entries": [
-    {
-      "documentId": 780,
-      "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5685605325190625475"
-    },
-    {
-      "documentId": 718,
-      "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5685605197563873605"
-    }
-    // ... up to 100+ entries per call
-  ]
-}
-```
-
-4. **Monitor progress**: Track successful updates (returned as `{"updated": N}`) and log any errors.
-
-### Recommended Approach
-
-For large datasets (1000+ documents), use a Python script that:
-- Reads the list of documents to update from a JSON file.
-- Groups them into batches of 100 or more.
-- Calls the `set_rag_file_name` MCP tool for each batch.
-- Logs progress and errors to a file.
+1. **Use the provided script**: Run the script with the path to the generated CSV file:
+   ```bash
+   python3 orca/scripts/batch_update_rag_file_name.py document_rag_file_report.csv
+   ```
+2. **Batch Configuration**: The script is configured to use a batch size of **200** entries per call to maximize throughput while respecting API limits.
+3. **Monitor progress**: The script will output the number of batches being processed.
 
 ---
 
@@ -281,6 +258,7 @@ The script handles all analysis logic — matching documents to RAG files, class
 
 1. Always match documents to RAG files by comparing `document.filename` with `rag_file.displayName`.
 2. Use the script to automate analysis and report generation; do not manually inspect large datasets.
-3. The HTML report is designed for Gmail compatibility — use inline CSS and table-based layouts.
-4. Batch resolution should use the `entries` array in `set_rag_file_name` with batches of at least 100 documents for efficiency.
-5. Cache all MCP tool responses to avoid redundant API calls and improve performance.
+3. The generated CSV file provides a direct source for batch updates, eliminating manual data extraction.
+4. The HTML report is designed for Gmail compatibility — use inline CSS and table-based layouts.
+5. Batch resolution should use the `entries` array in `set_rag_file_name` with a batch size of **200** for optimal efficiency.
+6. Cache all MCP tool responses to avoid redundant API calls and improve performance.

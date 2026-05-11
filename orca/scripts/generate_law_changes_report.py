@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import OrderedDict
@@ -1283,10 +1284,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default="cache/orca_cache_law_changes.json",
         help="Path to cache file or raw API response JSON",
     )
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+    os.makedirs(output_dir, exist_ok=True)
     parser.add_argument(
         "output",
         nargs="?",
-        default="law_changes_report.html",
+        default=os.path.join(output_dir, "law_changes_report.html"),
         help="Output HTML file path",
     )
     parser.add_argument(
