@@ -23,6 +23,7 @@ Before calling any MCP tool directly, **always check `orca/skills/` for an exist
 | Generate law changes report | `orca/skills/law_changes_report.md` |
 | Generate document-to-RAG-file matching report | `orca/skills/document_rag_file_report.md` |
 | Create RAG jurisdiction metadata for included regulations | `orca/skills/create_rag_jurisdiction_metadata.md` |
+| Batch process MCP tools via Python script (saves tokens) | `orca/skills/mcp_script_runner.md` |
 
 If a skill file exists for the task, read and follow it instead of improvising with raw MCP calls.
 

@@ -7,7 +7,7 @@ This skill describes how to create `jurisdiction_code` metadata for RAG files by
 ## Prerequisites
 
 - Access to the Orca MCP server
-- The following tools: `list_regulations`, `list_documents`, `create_rag_metadata`, `list_rag_metadata`
+- The following tools: `list_regulations`, `list_documents`, `create_rag_metadata`, `update_rag_metadata`, `list_rag_metadata`
 - Well-known data: Workspace 1, Compliance Repository ID 6
 
 ## Step 1: Fetch Data
@@ -63,15 +63,28 @@ The agent is responsible for invoking the MCP tools for each entry in the genera
 
 1. **Run the Script**: Execute the script to generate batch files (e.g., `rag_meta_batch_1.json`, `rag_meta_batch_2.json`).
 2. **Read Batch Files**: For each batch file, read the JSON and iterate through the `files` array.
-3. **Invoke Tool**: For each entry in the array, call `create_rag_metadata` with the entry's `ragFileName` and `entries` fields.
-4. **Immediate Verification**: After a successful `create_rag_metadata` call, immediately invoke `list_rag_metadata` for the same `ragFileName`.
-5. **Validate Result**: Compare the returned metadata with the expected values from the `entries` field.
-6. **Track Progress**: Log the result of both creation and verification (e.g., "Created & Verified: US" or "Failed/Mismatch").
-7. **Update Progress File**: After processing each batch of entries (recommended every 10-20 entries), update the progress tracking file at `orca/assets/rag_meta_batch_progress.json` with the current state. This ensures resumability if the process is interrupted.
+3. **Check Existing Metadata**: Before creating or updating, call `list_rag_metadata` for the target `ragFileName` to check if the metadata key already exists.
+4. **Decision Logic**:
+   - **If the key is missing**: Call `create_rag_metadata` with the entry's `ragFileName` and `entries` fields.
+   - **If the key exists and the value is identical**: Skip this entry (no action needed).
+   - **If the key exists but the value is different**: Call `update_rag_metadata` with the entry's `ragFileName` and `entries` fields.
+5. **Immediate Verification**: After a successful creation or update, immediately invoke `list_rag_metadata` for the same `ragFileName`.
+6. **Validate Result**: Compare the returned metadata with the expected values from the `entries` field.
+7. **Track Progress**: Log the result of both the operation and verification (e.g., "Created & Verified", "Updated & Verified", "Skipped (Match)", or "Failed/Mismatch").
+8. **Update Progress File**: After processing each batch of entries (recommended every 10-20 entries), update the progress tracking file at `orca/assets/rag_meta_batch_progress.json` with the current state. This ensures resumability if the process is interrupted.
+
+**Important**: Always check existing metadata using `list_rag_metadata` before attempting to create. Creating metadata on an existing key can cause timeouts. If the value differs, use `update_rag_metadata` instead.
 
 ### Example Tool Call Sequence
 
-**1. Create Metadata:**
+**1. Check Metadata:**
+```json
+{
+  "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5620287928265909657"
+}
+```
+
+**2a. Create Metadata (if key is missing):**
 ```json
 {
   "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5620287928265909657",
@@ -81,14 +94,24 @@ The agent is responsible for invoking the MCP tools for each entry in the genera
 }
 ```
 
-**2. Verify Metadata:**
+**2b. Update Metadata (if key exists with different value):**
+```json
+{
+  "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5620287928265909657",
+  "entries": [
+    { "key": "jurisdiction_code", "valueStr": "US" }
+  ]
+}
+```
+
+**3. Verify Metadata:**
 ```json
 {
   "ragFileName": "projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5620287928265909657"
 }
 ```
 
-Note: The `create_rag_metadata` tool supports multiple metadata keys (`entries`) for a single file, but each call only targets one file. The agent must call the tool once per file.
+Note: Both `create_rag_metadata` and `update_rag_metadata` support multiple metadata keys (`entries`) for a single file, but each call only targets one file. The agent must call the tool once per file.
 
 ### 3.1 Sample Check
 

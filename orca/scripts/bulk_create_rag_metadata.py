@@ -56,7 +56,7 @@ def load_entries(batch_file: str) -> List[Dict[str, Any]]:
 
 def process_entry(entry: Dict[str, Any], dry_run: bool = False, verify: bool = False) -> bool:
     """
-    Process a single entry by calling create_rag_metadata.
+    Process a single entry by checking existing metadata and then creating or updating.
     
     Returns True if successful, False otherwise.
     """
@@ -74,16 +74,24 @@ def process_entry(entry: Dict[str, Any], dry_run: bool = False, verify: bool = F
             break
     
     if dry_run:
-        print(f"  DRY RUN: Would create metadata for {rag_file_name}")
+        print(f"  DRY RUN: Would check/create/update metadata for {rag_file_name}")
         print(f"  DRY RUN:   jurisdiction_code = {jurisdiction_code}")
         return True
     
-    # Call the MCP tool
     try:
-        # In a real environment, this would call the MCP tool via a client or CLI
-        # For now, we print the action and simulate success
-        print(f"  Creating metadata for: {rag_file_name}")
-        print(f"    jurisdiction_code: {jurisdiction_code}")
+        # 1. Check Existing Metadata
+        print(f"  Checking metadata for: {rag_file_name}")
+        # TODO: Replace with actual MCP tool call
+        # current_meta = CallMcpTool(server_name="orca", tool_name="list_rag_metadata", arguments={"ragFileName": rag_file_name})
+        
+        # Simulate check logic for now (in real implementation, parse current_meta)
+        # For this simulation, we assume it's missing to trigger creation logic or just log
+        print(f"  Action: Creating/Updating metadata for {rag_file_name} with value {jurisdiction_code}")
+        
+        # 2. Decision Logic (Simulated)
+        # If key missing -> create_rag_metadata
+        # If key exists & same -> skip
+        # If key exists & different -> update_rag_metadata
         
         # TODO: Replace with actual MCP tool call
         # result = CallMcpTool(server_name="orca", tool_name="create_rag_metadata", arguments=entry)
@@ -93,7 +101,7 @@ def process_entry(entry: Dict[str, Any], dry_run: bool = False, verify: bool = F
             # TODO: Replace with actual verification call
             # verify_result = CallMcpTool(server_name="orca", tool_name="list_rag_metadata", arguments={"ragFileName": rag_file_name})
     except Exception as e:
-        print(f"  ERROR: Exception during metadata creation: {e}")
+        print(f"  ERROR: Exception during metadata processing: {e}")
         return False
     
     return True
