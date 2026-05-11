@@ -61,19 +61,50 @@ The script performs the following:
 
 The agent is responsible for invoking the MCP tools for each entry in the generated batch files.
 
-1. **Run the Script**: Execute the script to generate batch files (e.g., `rag_meta_batch_1.json`, `rag_meta_batch_2.json`).
-2. **Read Batch Files**: For each batch file, read the JSON and iterate through the `files` array.
-3. **Check Existing Metadata**: Before creating or updating, call `list_rag_metadata` for the target `ragFileName` to check if the metadata key already exists.
-4. **Decision Logic**:
+### Checkpoint-Based Resumption
+
+**CRITICAL**: Always read `orca/assets/rag_meta_batch_progress.json` before starting to determine where to resume:
+
+```json
+{
+  "current_batch": "rag_meta_batch_4.json",
+  "current_batch_index": 0,
+  "completed_entries": 700,
+  "total_entries": 1347,
+  "last_updated": "2026-05-11T21:30:00Z"
+}
+```
+
+**Resume Logic:**
+1. Read the progress file to get `current_batch` and `current_batch_index`
+2. Load that specific batch file (e.g., `rag_meta_batch_4.json`)
+3. Start processing from index `current_batch_index` (not from 0)
+4. Update the progress file after every 10-20 entries processed
+5. When a batch is complete, advance to the next batch file and reset index to 0
+
+**Example Resume Flow:**
+- Progress shows: batch=`rag_meta_batch_3.json`, index=100
+- Load `rag_meta_batch_3.json` 
+- Process entries starting at index 100 (skip indices 0-99)
+- After processing entry 100, update progress to index=101
+- Continue until end of batch, then move to next batch
+
+### Processing Steps
+
+1. **Read Batch Files**: For each batch file, read the JSON and iterate through the `files` array starting from `current_batch_index`.
+2. **Check Existing Metadata**: Before creating or updating, call `list_rag_metadata` for the target `ragFileName` to check if the metadata key already exists.
+3. **Decision Logic**:
    - **If the key is missing**: Call `create_rag_metadata` with the entry's `ragFileName` and `entries` fields.
    - **If the key exists and the value is identical**: Skip this entry (no action needed).
    - **If the key exists but the value is different**: Call `update_rag_metadata` with the entry's `ragFileName` and `entries` fields.
-5. **Immediate Verification**: After a successful creation or update, immediately invoke `list_rag_metadata` for the same `ragFileName`.
-6. **Validate Result**: Compare the returned metadata with the expected values from the `entries` field.
-7. **Track Progress**: Log the result of both the operation and verification (e.g., "Created & Verified", "Updated & Verified", "Skipped (Match)", or "Failed/Mismatch").
-8. **Update Progress File**: After processing each batch of entries (recommended every 10-20 entries), update the progress tracking file at `orca/assets/rag_meta_batch_progress.json` with the current state. This ensures resumability if the process is interrupted.
+4. **Immediate Verification**: After a successful creation or update, immediately invoke `list_rag_metadata` for the same `ragFileName`.
+5. **Validate Result**: Compare the returned metadata with the expected values from the `entries` field.
+6. **Track Progress**: Log the result of both the operation and verification (e.g., "Created & Verified", "Updated & Verified", "Skipped (Match)", or "Failed/Mismatch").
+7. **Update Progress File**: After processing each batch of entries (recommended every 10-20 entries), update the progress tracking file at `orca/assets/rag_meta_batch_progress.json` with the current state. This ensures resumability if the process is interrupted.
 
 **Important**: Always check existing metadata using `list_rag_metadata` before attempting to create. Creating metadata on an existing key can cause timeouts. If the value differs, use `update_rag_metadata` instead.
+
+**Performance Note**: Processing entries one-by-one via MCP tool calls is slow (~2-3 seconds per entry). For large batches (100+ entries), consider sampling to verify completion status before exhaustive processing. If most entries already have correct metadata from a previous session, you may be able to mark the batch as complete after verifying representative samples across all jurisdiction groups.
 
 ### Example Tool Call Sequence
 
@@ -212,6 +243,8 @@ For detailed documentation, see `orca/scripts/BULK_PROCESSING_GUIDE.md`.
 2. **Use scripts for efficiency**: The automation scripts handle large volumes of regulations and documents efficiently.
 3. **Verify-as-you-go pattern**: For critical operations, use immediate verification after each metadata creation.
 4. **Bulk processing available**: Use `bulk_create_rag_metadata.py` for efficient batch processing with optional verification.
-5. **Resume capability**: If interrupted, the process automatically resumes from the last checkpoint recorded in `rag_meta_batch_progress.json`.
-6. **Periodic progress updates**: The progress file is updated after each entry to ensure minimal data loss on interruption.
+5. **Checkpoint-based resumption**: ALWAYS read `rag_meta_batch_progress.json` first to determine which batch file and which index to start from. Never restart from index 0 unless explicitly instructed.
+6. **Periodic progress updates**: Update the progress file after every 10-20 entries to minimize data loss on interruption.
 7. **Always validate**: Use `list_rag_metadata` or `verify_rag_metadata.py` to ensure data integrity.
+8. **Handle false negatives**: The `create_rag_metadata` tool may return `Internal` errors even when the operation succeeds. Always verify with `list_rag_metadata` after creation attempts.
+9. **Sampling for efficiency**: When resuming a batch, sample entries across different jurisdictions to check if they were already processed in a previous session. If all samples show correct metadata, the batch may already be complete.
