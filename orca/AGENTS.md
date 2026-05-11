@@ -22,8 +22,46 @@ Before calling any MCP tool directly, **always check `orca/skills/` for an exist
 | Generate jurisdictions data quality report | `orca/skills/jurisdictions_report.md` |
 | Generate law changes report | `orca/skills/law_changes_report.md` |
 | Generate document-to-RAG-file matching report | `orca/skills/document_rag_file_report.md` |
+| Create RAG jurisdiction metadata for included regulations | `orca/skills/create_rag_jurisdiction_metadata.md` |
 
 If a skill file exists for the task, read and follow it instead of improvising with raw MCP calls.
+
+## Scripts
+
+The `orca/scripts/` directory contains helper scripts that automate data processing, analysis, and report generation. It is important to understand their role in the workflow:
+
+### What Scripts Do
+
+1. **Data Preparation**: Parse and transform large JSON responses from MCP tools into workable formats.
+2. **Matching & Validation**: Compare datasets (e.g., regulations vs. documents) and identify matches or mismatches.
+3. **Report Generation**: Produce HTML, CSV, or other structured outputs for human review.
+4. **Payload Preparation**: Generate batch JSON payloads that *could* be sent to MCP tools, but are not sent directly by the script.
+
+### What Scripts Do NOT Do
+
+- **Direct MCP Tool Invocation**: Scripts run in a standard Python environment and do **not** have direct access to the MCP server. They cannot call `create_rag_metadata`, `set_rag_file_name`, or any other MCP tool directly.
+- **Real-time Data Mutation**: Any action that modifies data in the Orca system (creating metadata, updating statuses, sending emails) must be performed by the agent using the appropriate MCP tool call, guided by the skill instructions.
+
+### Typical Workflow
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Fetch Data     │────▶│  Run Script      │────▶│  Agent invokes  │
+│  (MCP Tools)    │     │  (Analysis/Prep) │     │  MCP Tools      │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                                                        │
+                                                        ▼
+                                                ┌─────────────────┐
+                                                │  Verify Result  │
+                                                │  (MCP Tools)    │
+                                                └─────────────────┘
+```
+
+1. The agent fetches data using MCP tools (e.g., `list_regulations`, `list_documents`).
+2. The agent saves the raw JSON and runs a script to analyze it (e.g., matching filenames).
+3. The script outputs a summary of what actions are needed.
+4. The agent then invokes the relevant MCP tools directly (e.g., `create_rag_metadata`) based on the script's findings.
+5. Finally, the agent verifies the result using MCP tools (e.g., `list_rag_metadata`).
 
 ---
 
@@ -65,6 +103,21 @@ If a skill file exists for the task, read and follow it instead of improvising w
 ## Summary
 
 Orca manages **jurisdictions** and **regulations**, organizes them into **workspaces/repositories** with **documents**, imports documents into **Vertex AI RAG** for search, tracks **law changes**, and sends **email notifications** — all backed by GCS.
+
+## MCP Best Practices
+
+### Default Behavior for `limit` Parameter
+
+When calling MCP tools that accept a `limit` input parameter, **always fetch all data by default** unless the user explicitly requests a specific limit or there is a clear intentional reason to restrict results. Use `limit: 2147483647` (`0x7fffffff`, the max signed 32-bit integer) as the default value to ensure the complete dataset is returned.
+
+## Well-Known Data
+
+The following table documents known RAG corpora and other stable identifiers that may be referenced across skills and tools.
+
+| Display Name | Description | Full Resource Name |
+| :--- | :--- | :--- |
+| `prod-s30-w1-r5-agile-wave` | RAG corpus for workspace 1, repo Default POLICY(5 POLICY) | `projects/visdomapp-1/locations/us-east4/ragCorpora/8607504787811860480` |
+| `prod-s30-w1-r6-happy-quartz` | RAG corpus for workspace 1, repo Default COMPLIANCE(6 COMPLIANCE) | `projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088` |
 
 ## Dealing with Large Response Data
 
