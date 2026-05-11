@@ -16,7 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
+
 
 # Configuration
 WORKSPACE_ID = 1
@@ -56,8 +57,8 @@ async def get_mcp_session(config):
     """Yield an initialized MCP session via HTTP/SSE."""
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
-    async with sse_client(url=config["url"], headers=config.get("headers", {})) as streams:
-        async with ClientSession(*streams) as session:
+    async with streamablehttp_client(url=config["url"], headers=config.get("headers", {})) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             yield session
 
@@ -65,11 +66,41 @@ def load_entries(path):
     """Return the 'files' list from a batch JSON file."""
     return json.loads(path.read_text()).get("files", [])
 
+def _parse_content(result):
+    """Parse MCP tool result content into a dictionary."""
+    if not result.content:
+        return {}
+    
+    # Handle list of content items (common in MCP SDK)
+    if isinstance(result.content, list):
+        for item in result.content:
+            if hasattr(item, 'text'):
+                try:
+                    return json.loads(item.text)
+                except json.JSONDecodeError:
+                    continue
+            elif isinstance(item, dict):
+                return item
+    
+    # Handle direct dictionary
+    if isinstance(result.content, dict):
+        return result.content
+    
+    # Handle TextContent object
+    if hasattr(result.content, 'text'):
+        try:
+            return json.loads(result.content.text)
+        except json.JSONDecodeError:
+            return {}
+            
+    return {}
+
 async def fetch_regulations(session):
     """Return included regulations for the workspace."""
     print("Fetching regulations...")
     result = await session.call_tool("list_regulations", {"workspaceId": WORKSPACE_ID, "limit": 2**31 - 1})
-    regs = result.content.get("regulations", [])
+    content = _parse_content(result)
+    regs = content.get("regulations", [])
     included = [r for r in regs if r.get("included")]
     print(f"Found {len(included)} included regulations out of {len(regs)} total")
     return included
@@ -78,7 +109,8 @@ async def fetch_documents(session):
     """Return a map of filename → rag_file_name."""
     print("Fetching documents...")
     result = await session.call_tool("list_documents", {"workspaceId": WORKSPACE_ID, "repositoryId": REPOSITORY_ID, "limit": 2**31 - 1})
-    docs = result.content.get("documents", [])
+    content = _parse_content(result)
+    docs = content.get("documents", [])
     doc_map = {}
     for doc in docs:
         fname = doc.get("filename")
@@ -124,9 +156,11 @@ async def check_metadata(session, rag):
     """Return existing jurisdiction_code value or None."""
     try:
         result = await session.call_tool("list_rag_metadata", {"ragFileName": rag})
-        for entry in result.content.get("metadataEntries", []):
+        content = _parse_content(result)
+        entries = content.get("metadata") or []
+        for entry in entries:
             if entry.get("key") == "jurisdiction_code":
-                return entry.get("valueStr")
+                return entry.get("value")
     except Exception as e:
         print(f"    Warning: Failed to check metadata: {e}")
     return None

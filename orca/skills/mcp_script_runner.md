@@ -2,10 +2,10 @@
 
 ## Overview
 
-This skill generates Python scripts that call Orca MCP tools **directly via the MCP Python SDK**, bypassing agent-native tool calls for batch operations. This approach is significantly more efficient for processing large datasets (100+ items) because it avoids repeated agent reasoning cycles and token overhead.
+This skill generates Python scripts that call MCP tools **directly via the MCP Python SDK**, bypassing agent-native tool calls for batch operations. This approach is significantly more efficient for processing large datasets (100+ items) because it avoids repeated agent reasoning cycles and token overhead.
 
 **Use this skill when:**
-- Processing 100+ documents, regulations, or other entities in batch
+- Processing 100+ entities in batch
 - Need checkpoint/resume capability for long-running operations
 - Want to avoid agent token costs for mechanical/repetitive work
 - Operations follow predictable patterns with no intermediate decision-making
@@ -22,14 +22,14 @@ This skill generates Python scripts that call Orca MCP tools **directly via the 
 
 ### 1. MCP Server Configuration JSON
 
-The user must provide an MCP server configuration in JSON format. Example:
+The user must provide an MCP server configuration in JSON format.
 
 ```json
 {
   "type": "http",
-  "url": "https://orcaservices-360095844563.us-central1.run.app",
+  "url": "https://example.com/mcp",
   "headers": {
-    "X-API-KEY": "3c5a69d331b5bccc4435c9d3c73734011ea8efe700a1a2f0df12caad662f8ef7"
+    "Authorization": "Bearer <token>"
   }
 }
 ```
@@ -50,15 +50,14 @@ pip install mcp
 
 ## Step 1: Generate the Script
 
-When the user provides an MCP server config and describes a batch task, generate a complete Python script using the template from `orca/assets/mcp_script_template.py`.
+When the user provides an MCP server config and describes a batch task, generate a complete Python script using the template from `orca/scripts/mcp_script_template.py`.
 
 ### Required Inputs from User
 
 1. **MCP server config JSON** (transport type, URL, auth headers)
 2. **Task description** (what MCP tools to call, with what arguments)
-3. **Workspace ID** and **Repository ID** (if applicable)
-4. **Batch size** preference (default: 100 for most operations, 200 for `set_rag_file_name`)
-5. **Progress file path** (default: `orca/assets/{task_name}_progress.json`)
+3. **Batch size** preference (default: 100)
+4. **Progress file path** (default: `assets/{task_name}_progress.json`)
 
 ### Script Structure
 
@@ -81,9 +80,7 @@ from mcp.client.sse import sse_client  # For HTTP transport
 
 # --- Configuration ---
 MCP_CONFIG = { ... }  # From user-provided JSON
-WORKSPACE_ID = <int>
-REPOSITORY_ID = <int>
-PROGRESS_FILE = Path("orca/assets/<task>_progress.json")
+PROGRESS_FILE = Path("assets/<task>_progress.json")
 BATCH_SIZE = <int>
 
 # --- Progress tracking ---
@@ -117,12 +114,13 @@ async def main():
 
     async for session in get_mcp_session():
         # Fetch data to process
-        docs_result = await session.call_tool(
-            "list_documents",
-            arguments={"workspaceId": WORKSPACE_ID, "repositoryId": REPOSITORY_ID, "limit": 10000}
+        # TODO: Replace with appropriate list_tool call based on task
+        data_result = await session.call_tool(
+            "list_items",
+            arguments={"limit": 10000}
         )
 
-        pending = [d for d in docs_result.content if d["id"] not in processed_ids]
+        pending = [item for item in data_result.content if item["id"] not in processed_ids]
         print(f"Processing {len(pending)} pending items...")
 
         # Process in batches
@@ -131,27 +129,27 @@ async def main():
 
             try:
                 # Use batch API where supported
+                # TODO: Replace with appropriate update_tool call
                 result = await session.call_tool(
-                    "<tool_name>",
+                    "update_items",
                     arguments={
-                        "workspaceId": WORKSPACE_ID,
-                        "entries": [{"documentId": d["id"], "ragFileName": d["filename"]} for d in batch]
+                        "entries": [{"id": item["id"], "value": item["value"]} for item in batch]
                     }
                 )
 
-                # Handle false negative INTERNAL errors (see note below)
+                # Handle false negative INTERNAL errors if applicable
                 if result.isError and "INTERNAL" in str(result.content):
                     print(f"Warning: INTERNAL error - verifying via list_* tool...")
                     # Verify success via list tool
 
-                for doc in batch:
-                    progress["processed"].append(doc["id"])
+                for item in batch:
+                    progress["processed"].append(item["id"])
                 save_progress(progress)
                 print(f"Completed batch {i//BATCH_SIZE + 1}/{(len(pending)-1)//BATCH_SIZE + 1}")
 
             except Exception as e:
-                for doc in batch:
-                    progress["failed"].append({"id": doc["id"], "error": str(e)})
+                for item in batch:
+                    progress["failed"].append({"id": item["id"], "error": str(e)})
                 save_progress(progress)
                 print(f"Failed batch {i//BATCH_SIZE + 1}: {e}")
 
@@ -170,7 +168,7 @@ if __name__ == "__main__":
 Always include progress tracking so the script can resume after interruption:
 
 ```python
-PROGRESS_FILE = Path("orca/assets/my_task_progress.json")
+PROGRESS_FILE = Path("assets/my_task_progress.json")
 
 def load_progress():
     if PROGRESS_FILE.exists():
@@ -186,46 +184,45 @@ Save progress **after every batch** (not after every item) to minimize I/O while
 
 ### Pattern 2: Batch Operations
 
-Use `entries` arrays for tools that support batch updates. This is **critical for performance**:
+Use batch arrays for tools that support them. This is **critical for performance**:
 
 ```python
-# GOOD: Batch update 200 documents at once
+# GOOD: Batch update
 await session.call_tool(
-    "set_rag_file_name",
+    "update_items",
     arguments={
-        "workspaceId": 1,
         "entries": [
-            {"documentId": doc["id"], "ragFileName": doc["filename"]}
-            for doc in batch
+            {"id": item["id"], "value": item["value"]}
+            for item in batch
         ]
     }
 )
 
 # BAD: Individual calls (slow, rate-limited)
-for doc in batch:
-    await session.call_tool("set_rag_file_name", arguments={...})
+for item in batch:
+    await session.call_tool("update_item", arguments={...})
 ```
 
 **Batch size guidelines:**
-- `set_rag_file_name`: 200 entries per call (per memory cc04c11f)
-- Other batch tools: 100 entries per call
+- Default: 100 entries per call
+- Adjust based on specific tool limits or performance testing
 - Non-batch tools: Process sequentially with delay between calls
 
 ### Pattern 3: False Negative Handling
 
-The `create_rag_metadata` tool frequently returns `INTERNAL` errors even when successful. Do NOT treat these as failures:
+Some MCP tools may return `INTERNAL` errors even when successful. Do NOT treat these as failures without verification:
 
 ```python
-result = await session.call_tool("create_rag_metadata", arguments={...})
+result = await session.call_tool("some_tool", arguments={...})
 
 if result.isError and "INTERNAL" in str(result.content):
     print(f"Warning: INTERNAL error - may be false negative")
-    # Verify via list_rag_metadata
+    # Verify via corresponding list_tool
     verify_result = await session.call_tool(
-        "list_rag_metadata",
-        arguments={"ragFileName": target_file}
+        "list_items",
+        arguments={"filter": target_value}
     )
-    # If metadata appears in list, operation succeeded despite error
+    # If item appears in list, operation succeeded despite error
 ```
 
 ### Pattern 4: Transport-Specific Setup
@@ -250,9 +247,9 @@ async with sse_client(
 from mcp.client.stdio import stdio_client, StdioServerParameters
 
 server_params = StdioServerParameters(
-    command="orca",
-    args=["mcp-server"],
-    env=os.environ,  # Auth handled by binary's own config
+    command="mcp-server",
+    args=[],
+    env=os.environ,
 )
 
 async with stdio_client(server_params) as (read, write):
@@ -267,14 +264,14 @@ async with stdio_client(server_params) as (read, write):
 
 After generating the script:
 
-1. **Save it** to `orca/scripts/<task_name>.py`
+1. **Save it** to `scripts/<task_name>.py`
 2. **Install dependencies** if not already installed:
    ```bash
    pip install mcp
    ```
 3. **Run it**:
    ```bash
-   python3 orca/scripts/<task_name>.py
+   python3 scripts/<task_name>.py
    ```
 4. **Monitor output** — The script prints progress for each batch
 5. **Resume if interrupted** — Simply re-run the same command; it will skip already-processed items
@@ -287,115 +284,10 @@ After the script completes, verify results using MCP tools directly:
 
 ```bash
 # Re-fetch data to confirm changes
-# Call list_documents again and check rag_file_name values
-# Call list_rag_metadata to confirm metadata was created
+# Call appropriate list_tools to verify state
 ```
 
-For critical operations, generate a verification report using the appropriate skill (e.g., `document_rag_file_report.md`).
-
----
-
-## Example: Batch Set RAG File Names
-
-### User Request
-
-> "I have 500 documents in workspace 1, repository 6. Generate a script to set their `rag_file_name` to match their filename. Here's my MCP config: `{...}`"
-
-### Generated Script
-
-```python
-#!/usr/bin/env python3
-"""Batch set rag_file_name for all documents in workspace 1, repo 6."""
-
-import asyncio
-import json
-from pathlib import Path
-from mcp import ClientSession
-from mcp.client.sse import sse_client
-
-# --- Configuration ---
-MCP_CONFIG = {
-    "type": "http",
-    "url": "https://orcaservices-360095844563.us-central1.run.app",
-    "headers": {
-        "X-API-KEY": "3c5a69d331b5bccc4435c9d3c73734011ea8efe700a1a2f0df12caad662f8ef7"
-    }
-}
-WORKSPACE_ID = 1
-REPOSITORY_ID = 6
-PROGRESS_FILE = Path("orca/assets/set_rag_file_name_progress.json")
-BATCH_SIZE = 200  # Optimal for set_rag_file_name
-
-# --- Progress tracking ---
-def load_progress():
-    if PROGRESS_FILE.exists():
-        return json.loads(PROGRESS_FILE.read_text())
-    return {"processed": [], "failed": []}
-
-def save_progress(state):
-    PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PROGRESS_FILE.write_text(json.dumps(state, indent=2))
-
-# --- MCP client ---
-async def get_mcp_session():
-    async with sse_client(
-        url=MCP_CONFIG["url"],
-        headers=MCP_CONFIG.get("headers", {}),
-    ) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            yield session
-
-# --- Main logic ---
-async def main():
-    progress = load_progress()
-    processed_ids = set(progress["processed"])
-
-    async for session in get_mcp_session():
-        # Fetch all documents
-        docs_result = await session.call_tool(
-            "list_documents",
-            arguments={"workspaceId": WORKSPACE_ID, "repositoryId": REPOSITORY_ID, "limit": 10000}
-        )
-
-        documents = docs_result.content.get("documents", [])
-        pending = [d for d in documents if d["id"] not in processed_ids]
-        print(f"Total: {len(documents)}, Pending: {len(pending)}")
-
-        # Process in batches of 200
-        for i in range(0, len(pending), BATCH_SIZE):
-            batch = pending[i:i+BATCH_SIZE]
-            batch_num = i // BATCH_SIZE + 1
-            total_batches = (len(pending) - 1) // BATCH_SIZE + 1
-
-            try:
-                result = await session.call_tool(
-                    "set_rag_file_name",
-                    arguments={
-                        "workspaceId": WORKSPACE_ID,
-                        "entries": [
-                            {"documentId": doc["id"], "ragFileName": doc["filename"]}
-                            for doc in batch
-                        ]
-                    }
-                )
-
-                for doc in batch:
-                    progress["processed"].append(doc["id"])
-                save_progress(progress)
-                print(f"Batch {batch_num}/{total_batches} completed ({len(batch)} docs)")
-
-            except Exception as e:
-                for doc in batch:
-                    progress["failed"].append({"id": doc["id"], "error": str(e)})
-                save_progress(progress)
-                print(f"Batch {batch_num} failed: {e}")
-
-    print(f"\nDone! Processed: {len(progress['processed'])}, Failed: {len(progress['failed'])}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
+For critical operations, generate a verification report if needed.
 
 ---
 
@@ -414,9 +306,7 @@ if __name__ == "__main__":
 
 ## Related Skills
 
-- `document_rag_file_report.md` — Generate reports matching documents to RAG files
-- `create_rag_jurisdiction_metadata.md` — Create RAG metadata for jurisdictions
-- `send_email.md` — Send email notifications via Mailgun
+- Check service-specific skills for verification reports or specialized workflows.
 
 ---
 
@@ -424,7 +314,7 @@ if __name__ == "__main__":
 
 1. **Use scripts for batch operations** (>100 items) to save tokens and time
 2. **Always include checkpoint resume** via JSON progress files
-3. **Use batch `entries` arrays** where supported (especially `set_rag_file_name` with batch size 200)
+3. **Use batch arrays** where supported for better performance
 4. **Handle false negative INTERNAL errors** by verifying via `list_*` tools
 5. **Never hardcode auth tokens** — read from user-provided config JSON
 6. **Verify results** after script completion using MCP tools directly

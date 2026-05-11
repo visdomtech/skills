@@ -147,6 +147,6 @@ The script prints:
 5. **Verify-as-you-go**: Immediate post-operation checks
 6. **No duplicate writes**: Checks before creating
 7. **Batch files in assets**: Debugging and audit trail
-8. **Batch size 100**: Optimized for performance
+8. **Batch size 200**: Optimized for performance
 9. **Validate results**: Review summary and failures
 10. **Batch files as units**: Easy inspection of matching logic
