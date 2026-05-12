@@ -377,7 +377,6 @@ async def main():
     parser = argparse.ArgumentParser(description="Generate RAG metadata report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--force-refresh", action="store_true", help="Force refresh from MCP, ignore cache")
-    parser.add_argument("--no-cache", action="store_true", help="Disable Firestore caching")
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -391,15 +390,14 @@ async def main():
     documents = load_documents()
     print(f"Loaded {len(documents)} documents", flush=True)
 
-    # Initialize Firestore client if caching is enabled
+    # Initialize Firestore client (always try to use caching)
     firestore_client = None
-    if not args.no_cache:
-        try:
-            firestore_client = get_firestore_client()
-            print("Firestore caching enabled", flush=True)
-        except Exception as e:
-            print(f"Warning: Firestore initialization failed ({e}), proceeding without cache", flush=True)
-            firestore_client = None
+    try:
+        firestore_client = get_firestore_client()
+        print("Firestore caching enabled", flush=True)
+    except Exception as e:
+        print(f"Warning: Firestore initialization failed ({e}), proceeding without cache", flush=True)
+        firestore_client = None
     
     if args.force_refresh:
         print("Force refresh mode: ignoring cache", flush=True)

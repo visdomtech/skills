@@ -36,9 +36,6 @@ uv run rag-metadata-report --config orca/assets/mcp_config.json
 
 # Force refresh from MCP (ignore cache)
 uv run rag-metadata-report --config orca/assets/mcp_config.json --force-refresh
-
-# Disable caching entirely
-uv run rag-metadata-report --config orca/assets/mcp_config.json --no-cache
 ```
 
 The script will:
