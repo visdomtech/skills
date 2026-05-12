@@ -25,9 +25,9 @@ from .firestore_utils import get_firestore_client, get_rag_metadata, batch_save_
 # Configuration
 WORKSPACE_ID = 1
 REPOSITORY_ID = 6
-DOCUMENTS_FILE = Path("orca/assets/compliance_documents.json")
-CSV_OUTPUT = Path("orca/assets/rag_metadata_report.csv")
-HTML_OUTPUT = Path("orca/assets/rag_metadata_summary.html")
+DOCUMENTS_FILE = Path("assets/compliance_documents.json")
+CSV_OUTPUT = Path("assets/rag_metadata_report.csv")
+HTML_OUTPUT = Path("assets/rag_metadata_summary.html")
 CONCURRENCY_LIMIT = 3
 PROGRESS_LOCK = asyncio.Lock()
 PROGRESS_COUNTER = 0
@@ -431,5 +431,10 @@ async def main():
     print("Done.", flush=True)
 
 
-if __name__ == "__main__":
+def cli():
+    """Entry point for the console script."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli()

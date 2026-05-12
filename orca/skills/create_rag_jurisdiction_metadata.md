@@ -26,7 +26,7 @@ Create a JSON file with your MCP server configuration:
 }
 ```
 
-Save as `orca/assets/mcp_config.json`. **Never commit API keys.**
+Save as `assets/mcp_config.json`. **Never commit API keys.**
 
 ## Step 2: Run the Script
 
@@ -35,7 +35,7 @@ The script automates the entire workflow:
 1. Fetches included regulations (`list_regulations`)
 2. Fetches compliance documents (`list_documents`)
 3. Matches regulations to documents by filename
-4. Saves intermediate batch files to `orca/assets/`
+4. Saves intermediate batch files to `assets/`
 5. Creates/updates `jurisdiction_code` metadata with verification
 6. Handles false-negative INTERNAL errors
 7. Tracks progress for checkpoint resumption
@@ -46,10 +46,9 @@ The script automates the entire workflow:
 # Prepare virtual environment
 cd orca
 uv sync
-source .venv/bin/activate
 
 # Run script
-uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
+uv run python3 scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
 ```
 
 **Parameters:**
@@ -57,7 +56,7 @@ uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdic
 
 ## Step 3: Checkpoint Resumption
 
-Progress is tracked in `orca/assets/rag_meta_batch_progress.json`:
+Progress is tracked in `assets/rag_meta_batch_progress.json`:
 
 ```json
 {
@@ -112,13 +111,13 @@ Compare processed entries to total matched regulations (minus legitimate failure
 
 ### Batch Files
 
-Intermediate batches in `orca/assets/` can be inspected to verify matching logic.
+Intermediate batches in `assets/` can be inspected to verify matching logic.
 
 ## Workflow
 
 ```bash
 # 1. Create MCP config (one-time)
-cat > orca/assets/mcp_config.json <<EOF
+cat > assets/mcp_config.json <<EOF
 {
   "type": "http",
   "url": "https://orcaservices-360095844563.us-central1.run.app",
@@ -129,13 +128,12 @@ EOF
 # 2. Prepare virtual environment and install SDK
 cd orca
 uv sync
-source .venv/bin/activate
 
 # 3. Run script
-uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
+uv run python3 scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config assets/mcp_config.json
 
 # 4. Resume if interrupted (same command)
-uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
+uv run python3 scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config assets/mcp_config.json
 ```
 
 ### Output

@@ -10,8 +10,8 @@ dependencies = [
 ]
 
 [project.scripts]
-rag-metadata-report = "orca.scripts.rag_metadata_report.generate_rag_metadata_report:main"
-fetch-document-rag-data = "orca.scripts.document_rag_file_report.fetch_document_rag_data:main"
+rag-metadata-report = "scripts.rag_metadata_report.generate_rag_metadata_report:cli"
+fetch-document-rag-data = "scripts.document_rag_file_report.fetch_document_rag_data:main"
 
 [tool.uv]
 default-groups = "all"

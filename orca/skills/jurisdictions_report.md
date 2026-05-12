@@ -18,22 +18,21 @@ Set up the Python environment and run the fetch script, which calls `list_jurisd
 # Prepare virtual environment
 cd orca
 uv sync
-source .venv/bin/activate
 
 # Run fetch + report generation
-uv run python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json
+uv run python3 scripts/jurisdictions_report/fetch_jurisdictions.py --config assets/mcp_config.json
 
 # Optional: specify a custom output path
-uv run python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json --output orca/assets/my_report.html
+uv run python3 scripts/jurisdictions_report/fetch_jurisdictions.py --config assets/mcp_config.json --output assets/my_report.html
 ```
 
 The script:
 1. Connects to the Orca MCP server via the MCP SDK
 2. Calls `list_jurisdictions` to retrieve all jurisdictions
-3. Saves the raw data to `orca/assets/jurisdictions.json`
+3. Saves the raw data to `assets/jurisdictions.json`
 4. Runs `generate_jurisdictions_report.py` to produce the HTML report
 
-**MCP config format** (`orca/assets/mcp_config.json`):
+**MCP config format** (`assets/mcp_config.json`):
 ```json
 {
   "type": "http",
@@ -296,17 +295,17 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 Fetches jurisdictions from the Orca MCP server and generates the HTML report in one command.
 
 ```bash
-python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json [--output <path>]
+python3 scripts/jurisdictions_report/fetch_jurisdictions.py --config assets/mcp_config.json [--output <path>]
 ```
 
-Saves raw data to `orca/assets/jurisdictions.json`, then invokes `generate_jurisdictions_report.py` automatically.
+Saves raw data to `assets/jurisdictions.json`, then invokes `generate_jurisdictions_report.py` automatically.
 
 ### `generate_jurisdictions_report.py` (analysis + HTML generation)
 
 Can also be run standalone on previously fetched data:
 
 ```bash
-python3 orca/scripts/jurisdictions_report/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
+python3 scripts/jurisdictions_report/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
 ```
 
 **Parameters:**

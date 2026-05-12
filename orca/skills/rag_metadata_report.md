@@ -14,7 +14,7 @@ This skill describes how to generate a comprehensive report on the jurisdiction 
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`).
 - **Optional**: Google Cloud credentials configured for Firestore access (for caching).
 - Workspace ID: 1, Repository ID: 6.
-- Documents data cached at `orca/assets/compliance_documents.json`.
+- Documents data cached at `assets/compliance_documents.json`.
 
 ## Step 1: Prepare Environment
 
@@ -23,7 +23,6 @@ Before running the script, ensure your virtual environment is set up and depende
 ```bash
 cd orca
 uv sync
-source .venv/bin/activate
 ```
 
 ## Step 2: Run the Script
@@ -32,20 +31,20 @@ Execute the generation script using your MCP configuration:
 
 ```bash
 # Default: Uses Firestore cache if available
-uv run rag-metadata-report --config orca/assets/mcp_config.json
+uv run rag-metadata-report --config assets/mcp_config.json
 
 # Force refresh from MCP (ignore cache)
-uv run rag-metadata-report --config orca/assets/mcp_config.json --force-refresh
+uv run rag-metadata-report --config assets/mcp_config.json --force-refresh
 ```
 
 The script will:
-1. Load the list of documents from `orca/assets/compliance_documents.json`.
+1. Load the list of documents from `assets/compliance_documents.json`.
 2. Connect to the Orca MCP server.
 3. **Check Firestore cache** for each document's metadata (unless `--force-refresh` is used).
 4. Fetch missing metadata from MCP in parallel (concurrency limit: 3).
-5. **Cache fetched metadata in Firestore** for future use (unless `--no-cache` is used).
-6. Generate `orca/assets/rag_metadata_report.csv` with detailed metadata.
-7. Generate `orca/assets/rag_metadata_summary.html` with a visual summary.
+5. **Cache fetched metadata in Firestore** for future use.
+6. Generate `assets/rag_metadata_report.csv` with detailed metadata.
+7. Generate `assets/rag_metadata_summary.html` with a visual summary.
 
 ## Output Files
 

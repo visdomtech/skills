@@ -18,24 +18,23 @@ Run the fetch script, which calls all required MCP tools via the MCP SDK and gen
 # Prepare virtual environment
 cd orca
 uv sync
-source .venv/bin/activate
 
 # Fetch data and generate report (default corpus: prod-s30-w1-r6-happy-quartz)
-uv run fetch-document-rag-data --config orca/assets/mcp_config.json
+uv run fetch-document-rag-data --config assets/mcp_config.json
 
 # Specify a different corpus
 uv run fetch-document-rag-data \
-  --config orca/assets/mcp_config.json \
+  --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r5-agile-wave \
-  --output orca/assets/policy_rag_file_report.html
+  --output assets/policy_rag_file_report.html
 ```
 
 **Arguments:**
 - `--config` (required): Path to MCP config JSON
 - `--corpus-display-name` (optional): Corpus display name. Default: `prod-s30-w1-r6-happy-quartz`
-- `--output` (optional): Output HTML path. Default: `orca/assets/document_rag_file_report.html`
+- `--output` (optional): Output HTML path. Default: `assets/document_rag_file_report.html`
 
-**MCP config format** (`orca/assets/mcp_config.json`):
+**MCP config format** (`assets/mcp_config.json`):
 ```json
 {
   "type": "http",
@@ -51,19 +50,19 @@ The script:
 2. Calls `list_rag_files` with the resolved corpus name
 3. Calls `list_workspaces` + `list_repositories` to find the matching workspace/repository
 4. Calls `list_documents` with the resolved IDs
-5. Saves RAG files to `orca/assets/rag_files.json` and documents to `orca/assets/documents.json`
+5. Saves RAG files to `assets/rag_files.json` and documents to `assets/documents.json`
 6. Runs `generate_document_rag_file_report.py` to produce the HTML and CSV outputs
 
 ---
 
 ## Step 2: Analyze & Match
 
-Use the script `orca/scripts/document_rag_file_report/generate_document_rag_file_report.py` to perform matching and generate the report.
+Use the script `scripts/document_rag_file_report/generate_document_rag_file_report.py` to perform matching and generate the report.
 
 ### Script Usage
 
 ```bash
-python3 orca/scripts/document_rag_file_report/generate_document_rag_file_report.py <path_to_documents_cache> <path_to_rag_files_cache> [output_file]
+python3 scripts/document_rag_file_report/generate_document_rag_file_report.py <path_to_documents_cache> <path_to_rag_files_cache> [output_file]
 ```
 
 **Parameters:**
@@ -145,13 +144,13 @@ After reviewing the report, resolve all documents that need `rag_file_name` upda
 
 ### Batch Update Workflow
 
-The skill provides a dedicated script `orca/scripts/document_rag_file_report/batch_update_rag_file_name.py` that reads the generated CSV and calls `set_rag_file_name` directly via the MCP SDK in optimized batches.
+The skill provides a dedicated script `scripts/document_rag_file_report/batch_update_rag_file_name.py` that reads the generated CSV and calls `set_rag_file_name` directly via the MCP SDK in optimized batches.
 
 1. **Use the provided script**: Run the script with the path to the generated CSV file:
    ```bash
-   uv run python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
-     --config orca/assets/mcp_config.json \
-     --csv orca/assets/document_rag_file_report.csv \
+   uv run python3 scripts/document_rag_file_report/batch_update_rag_file_name.py \
+     --config assets/mcp_config.json \
+     --csv assets/document_rag_file_report.csv \
      [--workspace-id <id>]
    ```
    
@@ -185,9 +184,9 @@ Call `list_documents` again with the same `workspaceId` and `repositoryId`:
 Generate a new report using the updated documents cache and the original RAG files cache:
 
 ```bash
-python3 orca/scripts/document_rag_file_report/generate_document_rag_file_report.py \
-  orca/assets/orca_cache_{new_docs_hash}.json \
-  orca/assets/orca_cache_970ee63a14ba2333.json \
+python3 scripts/document_rag_file_report/generate_document_rag_file_report.py \
+  assets/orca_cache_{new_docs_hash}.json \
+  assets/orca_cache_970ee63a14ba2333.json \
   document_rag_file_report_verification.html
 ```
 
@@ -215,30 +214,30 @@ If any documents still appear in the "Empty/Null" or "Different" categories afte
 
 ## Automated Script
 
-The Python script at `orca/scripts/document_rag_file_report/generate_document_rag_file_report.py` automates Steps 2 and 3 (analysis + HTML generation).
+The Python script at `scripts/document_rag_file_report/generate_document_rag_file_report.py` automates Steps 2 and 3 (analysis + HTML generation).
 
 ### End-to-End Workflow
 
 ```bash
 # 1. Fetch all data and generate initial report
-cd orca && uv sync && source .venv/bin/activate
-uv run fetch-document-rag-data --config orca/assets/mcp_config.json
+cd orca && uv sync
+uv run fetch-document-rag-data --config assets/mcp_config.json
 
 # 2. Open the initial report
-open orca/assets/document_rag_file_report.html
+open assets/document_rag_file_report.html
 
 # 3. Review the report and run batch updates from the generated CSV
-uv run python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
-  --config orca/assets/mcp_config.json \
-  --csv orca/assets/document_rag_file_report.csv
+uv run python3 scripts/document_rag_file_report/batch_update_rag_file_name.py \
+  --config assets/mcp_config.json \
+  --csv assets/document_rag_file_report.csv
 
 # 4. Re-fetch to verify updates and generate verification report
 uv run fetch-document-rag-data \
-  --config orca/assets/mcp_config.json \
-  --output orca/assets/document_rag_file_report_verification.html
+  --config assets/mcp_config.json \
+  --output assets/document_rag_file_report_verification.html
 
 # 5. Open and review the verification report
-open orca/assets/document_rag_file_report_verification.html
+open assets/document_rag_file_report_verification.html
 ```
 
 `generate_document_rag_file_report.py` handles all analysis logic — matching documents to RAG files, classifying by status, computing summary statistics, and generating the full Gmail-compatible HTML report with inline styles.
@@ -252,4 +251,4 @@ open orca/assets/document_rag_file_report_verification.html
 3. The generated CSV file provides a direct source for batch updates, eliminating manual data extraction.
 4. The HTML report is designed for Gmail compatibility — use inline CSS and table-based layouts.
 5. Batch resolution should use the `entries` array in `set_rag_file_name` with a batch size of **200** for optimal efficiency.
-6. Save all MCP tool responses in `orca/assets/` to facilitate reuse and avoid redundant API calls.
+6. Save all MCP tool responses in `assets/` to facilitate reuse and avoid redundant API calls.

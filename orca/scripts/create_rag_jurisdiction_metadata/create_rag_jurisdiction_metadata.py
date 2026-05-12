@@ -23,9 +23,9 @@ from mcp.client.streamable_http import streamable_http_client
 # Configuration
 WORKSPACE_ID = 1
 REPOSITORY_ID = 6
-PROGRESS_FILE = Path("orca/assets/rag_meta_batch_progress.json")
+PROGRESS_FILE = Path("assets/rag_meta_batch_progress.json")
 BATCH_SIZE = 100
-BATCH_DIR = Path("orca/assets")
+BATCH_DIR = Path("assets")
 
 def load_progress():
     """Load progress state or return defaults."""
