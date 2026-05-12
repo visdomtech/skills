@@ -11,7 +11,8 @@ dependencies = [
 
 [project.scripts]
 rag-metadata-report = "scripts.rag_metadata_report.generate_rag_metadata_report:cli"
-fetch-document-rag-data = "scripts.document_rag_file_report.fetch_document_rag_data:main"
+fetch-document-rag-data = "scripts.document_rag_file_report.fetch_document_rag_data:async_main"
+fetch-compliance-documents = "scripts.rag_metadata_report.fetch_compliance_documents:async_main"
 
 [tool.uv]
 default-groups = "all"

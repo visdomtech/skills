@@ -15,6 +15,7 @@ import asyncio
 import json
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -52,6 +53,7 @@ def _parse_content(result):
     return {}
 
 
+@asynccontextmanager
 async def get_mcp_session(config):
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
@@ -64,7 +66,7 @@ async def get_mcp_session(config):
 
 
 async def fetch_all(config, corpus_display_name):
-    async for session in get_mcp_session(config):
+    async with get_mcp_session(config) as session:
         # Step 1: Resolve corpus resource name
         print(f"Fetching corpus list to find '{corpus_display_name}'...")
         result = await session.call_tool("list_corpus", {})
@@ -171,6 +173,11 @@ async def main():
         raise SystemExit(result.returncode)
 
     print(f"\nDone. Report saved to {args.output}")
+
+
+def async_main():
+    """Entry point for console script (uv handles asyncio)."""
+    asyncio.run(main())
 
 
 if __name__ == "__main__":
