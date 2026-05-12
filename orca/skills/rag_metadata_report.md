@@ -34,7 +34,7 @@ python3 orca/scripts/generate_rag_metadata_report.py --config orca/assets/mcp_co
 The script will:
 1. Load the list of documents from `orca/assets/compliance_documents.json`.
 2. Connect to the Orca MCP server.
-3. Fetch metadata for each document's associated RAG file in parallel (concurrency limit: 5).
+3. Fetch metadata for each document's associated RAG file in parallel (concurrency limit: 3).
 4. Generate `orca/assets/rag_metadata_report.csv` with detailed metadata.
 5. Generate `orca/assets/rag_metadata_summary.html` with a visual summary.
 

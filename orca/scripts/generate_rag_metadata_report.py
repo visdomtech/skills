@@ -23,7 +23,9 @@ REPOSITORY_ID = 6
 DOCUMENTS_FILE = Path("orca/assets/compliance_documents.json")
 CSV_OUTPUT = Path("orca/assets/rag_metadata_report.csv")
 HTML_OUTPUT = Path("orca/assets/rag_metadata_summary.html")
-CONCURRENCY_LIMIT = 5
+CONCURRENCY_LIMIT = 3
+PROGRESS_LOCK = asyncio.Lock()
+PROGRESS_COUNTER = 0
 
 
 def load_documents():
@@ -78,38 +80,47 @@ def _parse_content(result):
     return {}
 
 
-async def fetch_metadata(session, doc, semaphore):
+async def fetch_metadata(session, doc, semaphore, total):
     """Fetch metadata for a single document with concurrency control."""
+    global PROGRESS_COUNTER
     rag_name = doc.get("rag_file_name")
     filename = doc.get("filename", "Unknown")
     
     if not rag_name:
-        return {
+        result = {
             "filename": filename,
             "rag_file_name": "",
             "metadata": [],
             "error": "No rag_file_name"
         }
+    else:
+        async with semaphore:
+            try:
+                api_result = await session.call_tool("list_rag_metadata", {"ragFileName": rag_name})
+                content = _parse_content(api_result)
+                metadata = content.get("metadata", [])
+                result = {
+                    "filename": filename,
+                    "rag_file_name": rag_name,
+                    "metadata": metadata,
+                    "error": None
+                }
+            except Exception as e:
+                print(f"  Warning: Failed to fetch metadata for {filename}: {e}", flush=True)
+                result = {
+                    "filename": filename,
+                    "rag_file_name": rag_name,
+                    "metadata": [],
+                    "error": str(e)
+                }
 
-    async with semaphore:
-        try:
-            result = await session.call_tool("list_rag_metadata", {"ragFileName": rag_name})
-            content = _parse_content(result)
-            metadata = content.get("metadata", [])
-            return {
-                "filename": filename,
-                "rag_file_name": rag_name,
-                "metadata": metadata,
-                "error": None
-            }
-        except Exception as e:
-            print(f"  Warning: Failed to fetch metadata for {filename}: {e}")
-            return {
-                "filename": filename,
-                "rag_file_name": rag_name,
-                "metadata": [],
-                "error": str(e)
-            }
+    # Update progress
+    async with PROGRESS_LOCK:
+        PROGRESS_COUNTER += 1
+        if PROGRESS_COUNTER % 50 == 0:
+            print(f"Processed {PROGRESS_COUNTER}/{total} documents...", flush=True)
+    
+    return result
 
 
 def generate_csv(results):
@@ -144,7 +155,7 @@ def generate_csv(results):
         writer.writeheader()
         writer.writerows(rows)
     
-    print(f"Detailed CSV written to {CSV_OUTPUT} ({len(rows)} rows)")
+    print(f"Detailed CSV written to {CSV_OUTPUT} ({len(rows)} rows)", flush=True)
 
 
 def generate_html(results):
@@ -294,7 +305,7 @@ def generate_html(results):
     with open(HTML_OUTPUT, "w") as f:
         f.write(html)
     
-    print(f"Summary HTML written to {HTML_OUTPUT}")
+    print(f"Summary HTML written to {HTML_OUTPUT}", flush=True)
 
 
 async def main():
@@ -308,23 +319,23 @@ async def main():
         raise SystemExit(1)
 
     config = json.loads(config_path.read_text())
-    print(f"Config loaded from {config_path}")
+    print(f"Config loaded from {config_path}", flush=True)
 
     documents = load_documents()
-    print(f"Loaded {len(documents)} documents")
+    print(f"Loaded {len(documents)} documents", flush=True)
 
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     results = []
 
     async for session in get_mcp_session(config):
-        tasks = [fetch_metadata(session, doc, semaphore) for doc in documents]
+        tasks = [fetch_metadata(session, doc, semaphore, len(documents)) for doc in documents]
         
         # Use gather with return_exceptions to handle errors gracefully without crashing the task group
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
         
         for i, res in enumerate(raw_results):
             if isinstance(res, Exception):
-                print(f"  Warning: Task {i} failed: {res}")
+                print(f"  Warning: Task {i} failed: {res}", flush=True)
                 results.append({
                     "filename": documents[i].get("filename", "Unknown"),
                     "rag_file_name": documents[i].get("rag_file_name", ""),
@@ -333,13 +344,10 @@ async def main():
                 })
             else:
                 results.append(res)
-            
-            if (i + 1) % 50 == 0:
-                print(f"Processed {i + 1}/{len(documents)} documents...")
 
     generate_csv(results)
     generate_html(results)
-    print("Done.")
+    print("Done.", flush=True)
 
 
 if __name__ == "__main__":
