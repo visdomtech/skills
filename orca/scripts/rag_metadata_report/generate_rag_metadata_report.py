@@ -19,8 +19,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from .firestore_utils import get_firestore_client, get_rag_metadata, batch_save_rag_metadata
-
+from orca.scripts.rag_metadata_report.firestore_utils import get_rag_metadata, save_rag_metadata
 
 # Configuration
 WORKSPACE_ID = 1
@@ -176,8 +175,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
 
 def save_rag_metadata_to_cache(firestore_client, result, doc):
     """Helper to save metadata to Firestore cache."""
-    from firestore_utils import save_rag_metadata
-    
+
     save_rag_metadata(
         client=firestore_client,
         rag_file_name=result["rag_file_name"],
