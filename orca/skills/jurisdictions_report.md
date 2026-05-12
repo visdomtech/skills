@@ -7,36 +7,42 @@ This skill describes how to generate a comprehensive HTML report from Orca juris
 ## Prerequisites
 
 - Access to the Orca MCP server
-- The `list_jurisdictions` tool (no parameters required)
+- `uv` for Python environment management
+- MCP config JSON (see Step 1)
 
-## Step 1: Fetch Jurisdictions Data
+## Step 1: Prepare Environment and Run Script
 
-Call the `list_jurisdictions` tool to retrieve all jurisdictions. The tool returns a JSON response with a `jurisdictions` array.
+Set up the Python environment and run the fetch script, which calls `list_jurisdictions` via the MCP SDK and generates the report automatically.
 
-```json
-{
-  "jurisdictions": [
-    {
-      "aliases": null,
-      "code": "US",
-      "created_at": "2025-11-19T12:22:46.62899+00:00",
-      "fips_code": null,
-      "full_name": "United States of America",
-      "jurisdiction_id": 1,
-      "jurisdiction_type": "FEDERAL",
-      "labor_dept_url": "https://www.dol.gov",
-      "name": "United States",
-      "parent_jurisdiction_id": null,
-      "population": 331000000,
-      "timezone": "America/New_York",
-      "updated_at": "2026-04-17T08:47:54.134545+00:00",
-      "website_url": "https://www.usa.gov"
-    }
-  ]
-}
+```bash
+# Prepare virtual environment
+uv venv --allow-existing
+uv pip install mcp
+source .venv/bin/activate
+
+# Run fetch + report generation
+python3 orca/scripts/fetch_jurisdictions.py --config orca/assets/mcp_config.json
+
+# Optional: specify a custom output path
+python3 orca/scripts/fetch_jurisdictions.py --config orca/assets/mcp_config.json --output orca/assets/my_report.html
 ```
 
-**Important:** The response may be very large (100+ KB). If written to a cache file, read the JSON file and parse it with a script rather than trying to load the entire raw text inline.
+The script:
+1. Connects to the Orca MCP server via the MCP SDK
+2. Calls `list_jurisdictions` to retrieve all jurisdictions
+3. Saves the raw data to `orca/assets/jurisdictions.json`
+4. Runs `generate_jurisdictions_report.py` to produce the HTML report
+
+**MCP config format** (`orca/assets/mcp_config.json`):
+```json
+{
+  "type": "http",
+  "url": "https://orcaservices-360095844563.us-central1.run.app",
+  "headers": {
+    "X-API-KEY": "your-api-key-here"
+  }
+}
+```
 
 ## Step 2: Analyze the Data
 
@@ -283,32 +289,29 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 - Be copied and pasted into a Gmail compose window (the inline styles and table layout ensure it renders correctly).
 - Be sent via email — **follow `orca/skills/send_email.md`** for the correct workflow. Use `--html` to send the report as the email body, or `--attach` to send it as a file attachment (or both).
 
-## Automated Script
+## Automated Scripts
 
-A Python script at `orca/scripts/generate_jurisdictions_report.py` automates Steps 2 and 3 (analysis + HTML generation).
+### `fetch_jurisdictions.py` (MCP SDK — primary entry point)
 
-### Usage
+Fetches jurisdictions from the Orca MCP server and generates the HTML report in one command.
 
 ```bash
-python3 orca/scripts/generate_jurisdictions_report.py <path_to_cache_or_raw_json> [output_file]
+python3 orca/scripts/fetch_jurisdictions.py --config orca/assets/mcp_config.json [--output <path>]
+```
+
+Saves raw data to `orca/assets/jurisdictions.json`, then invokes `generate_jurisdictions_report.py` automatically.
+
+### `generate_jurisdictions_report.py` (analysis + HTML generation)
+
+Can also be run standalone on previously fetched data:
+
+```bash
+python3 orca/scripts/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
 ```
 
 **Parameters:**
-- `path_to_cache_or_raw_json` (required): Path to either a cached response JSON (with `response.data.jurisdictions`) or a raw `list_jurisdictions` response (with `jurisdictions` array).
+- `path_to_jurisdictions_json` (required): Path to a JSON file with a `jurisdictions` array.
 - `output_file` (optional): Output HTML file path. Defaults to `jurisdictions_report.html`.
-
-### End-to-End Workflow
-
-```bash
-# 1. Fetch data and save to a file
-# (call list_jurisdictions MCP tool, save output to orca/scripts/data.json)
-
-# 2. Generate the report
-python3 orca/scripts/generate_jurisdictions_report.py orca/scripts/data.json
-
-# 3. Open the report
-open jurisdictions_report.html
-```
 
 The script handles all analysis logic — counting by level, detecting invalid entries via the five criteria (A–E), computing the data health score, and generating the full Gmail-compatible HTML report with inline styles.
 
