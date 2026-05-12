@@ -5,10 +5,9 @@ This script is designed to be run by an agent that has access to MCP tools,
 or it can be adapted to use an MCP client library directly.
 """
 
-import json
 import csv
-import os
-from typing import List, Dict, Any
+import json
+
 
 def main():
     # Load documents

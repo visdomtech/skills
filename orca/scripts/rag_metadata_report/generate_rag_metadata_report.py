@@ -19,7 +19,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from orca.scripts.rag_metadata_report.firestore_utils import get_rag_metadata, save_rag_metadata
+from scripts.rag_metadata_report.firestore_utils import get_rag_metadata, save_rag_metadata, get_firestore_client
 
 # Configuration
 WORKSPACE_ID = 1
@@ -388,15 +388,7 @@ async def main():
     documents = load_documents()
     print(f"Loaded {len(documents)} documents", flush=True)
 
-    # Initialize Firestore client (always try to use caching)
-    firestore_client = None
-    try:
-        firestore_client = get_firestore_client()
-        print("Firestore caching enabled", flush=True)
-    except Exception as e:
-        print(f"Warning: Firestore initialization failed ({e}), proceeding without cache", flush=True)
-        firestore_client = None
-    
+    firestore_client = get_firestore_client()
     if args.force_refresh:
         print("Force refresh mode: ignoring cache", flush=True)
 

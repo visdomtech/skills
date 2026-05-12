@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Firestore client utilities for RAG metadata caching."""
 
-import json
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 from google.cloud import firestore
-
 
 # Firestore collection name
 RAG_METADATA_COLLECTION = "rag_metadata_cache"
