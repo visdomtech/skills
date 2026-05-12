@@ -15,8 +15,9 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 
 ASSETS_DIR = Path("orca/assets")
@@ -50,10 +51,12 @@ def _parse_content(result):
 async def get_mcp_session(config):
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
-    async with streamablehttp_client(url=config["url"], headers=config.get("headers", {})) as (read_stream, write_stream, _):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            yield session
+    client = httpx.AsyncClient(headers=config.get("headers", {}))
+    async with client:
+        async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                yield session
 
 
 async def fetch_law_changes(config, since_date, change_type=None, jurisdiction=None):
