@@ -7,7 +7,7 @@ Creates `jurisdiction_code` metadata for RAG files by matching included regulati
 ## Prerequisites
 
 - Orca MCP server access
-- MCP Python SDK: `pip install mcp`
+- `uv` for Python environment management
 - MCP config JSON (see Step 1)
 - Tools used: `list_regulations`, `list_documents`, `create_rag_metadata`, `update_rag_metadata`, `list_rag_metadata`
 - Workspace 1, Compliance Repository ID 6
@@ -43,6 +43,12 @@ The script automates the entire workflow:
 ### Usage
 
 ```bash
+# Prepare virtual environment
+uv venv --allow-existing
+uv pip install mcp
+source .venv/bin/activate
+
+# Run script
 python3 orca/scripts/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
 ```
 
@@ -120,8 +126,10 @@ cat > orca/assets/mcp_config.json <<EOF
 }
 EOF
 
-# 2. Install SDK
-pip install mcp
+# 2. Prepare virtual environment and install SDK
+uv venv --allow-existing
+uv pip install mcp
+source .venv/bin/activate
 
 # 3. Run script
 python3 orca/scripts/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
