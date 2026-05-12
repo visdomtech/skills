@@ -113,7 +113,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
         # Try to get from Firestore cache first (unless force_refresh)
         if firestore_client and not force_refresh:
             try:
-                cached = get_rag_metadata(firestore_client, rag_name)
+                cached = get_rag_metadata(firestore_client, filename)
                 if cached:
                     async with PROGRESS_LOCK:
                         PROGRESS_COUNTER += 1

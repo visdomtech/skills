@@ -16,22 +16,19 @@ def get_firestore_client(project_id: Optional[str] = "visdomapp-1") -> firestore
     return firestore.Client(project=project_id, database="regulations")
 
 
-def _get_document_ref(client: firestore.Client, rag_file_name: str) -> firestore.DocumentReference:
+def _get_document_ref(client: firestore.Client, filename: str) -> firestore.DocumentReference:
     """Get Firestore document reference for a RAG file.
     
-    Uses the RAG file resource name as the document ID (with special characters escaped).
+    Uses the document filename as the document ID.
     
     Args:
         client: Firestore client instance.
-        rag_file_name: Full RAG file resource name.
+        filename: Document filename.
     
     Returns:
         Document reference.
     """
-    # Use the last segment of the RAG file name as document ID for simplicity
-    # Format: projects/{project}/locations/{location}/ragCorpora/{corpus}/ragFiles/{file_id}
-    doc_id = rag_file_name.split("/")[-1]
-    return client.collection(RAG_METADATA_COLLECTION).document(doc_id)
+    return client.collection(RAG_METADATA_COLLECTION).document(filename)
 
 
 def save_rag_metadata(
@@ -52,7 +49,7 @@ def save_rag_metadata(
         document_data: Optional original document data from MCP.
         error: Optional error message if fetching failed.
     """
-    doc_ref = _get_document_ref(client, rag_file_name)
+    doc_ref = _get_document_ref(client, filename)
     
     data = {
         "rag_file_name": rag_file_name,
@@ -71,18 +68,18 @@ def save_rag_metadata(
 
 def get_rag_metadata(
     client: firestore.Client,
-    rag_file_name: str,
+    filename: str,
 ) -> Optional[Dict[str, Any]]:
     """Retrieve RAG metadata from Firestore cache.
     
     Args:
         client: Firestore client instance.
-        rag_file_name: Full RAG file resource name.
+        filename: Document filename.
     
     Returns:
         Dictionary with cached data if found, None otherwise.
     """
-    doc_ref = _get_document_ref(client, rag_file_name)
+    doc_ref = _get_document_ref(client, filename)
     doc = doc_ref.get()
     
     if not doc.exists:
@@ -116,15 +113,15 @@ def batch_save_rag_metadata(
     count = 0
     
     for res in results:
-        rag_file_name = res.get("rag_file_name", "")
-        if not rag_file_name:
+        filename = res.get("filename", "")
+        if not filename:
             continue
         
-        doc_ref = _get_document_ref(client, rag_file_name)
+        doc_ref = _get_document_ref(client, filename)
         
         data = {
-            "rag_file_name": rag_file_name,
-            "filename": res.get("filename", ""),
+            "rag_file_name": res.get("rag_file_name", ""),
+            "filename": filename,
             "metadata": res.get("metadata", []),
             "cached_at": datetime.now(timezone.utc),
             "error": res.get("error"),
