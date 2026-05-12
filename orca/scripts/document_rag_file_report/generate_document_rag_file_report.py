@@ -7,9 +7,22 @@ from datetime import datetime, timezone
 # Paths
 DOCS_FILE = sys.argv[1] if len(sys.argv) > 1 else None
 RAG_FILES = sys.argv[2] if len(sys.argv) > 2 else None
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, os.path.basename(sys.argv[3])) if len(sys.argv) > 3 else os.path.join(OUTPUT_DIR, "document_rag_file_report.html")
+
+# Resolve output path - use absolute path if provided, otherwise default to assets dir
+if len(sys.argv) > 3:
+    output_arg = sys.argv[3]
+    # If it's an absolute path or starts with common path indicators, use as-is
+    if os.path.isabs(output_arg) or output_arg.startswith('.') or '/' in output_arg:
+        OUTPUT_FILE = output_arg
+    else:
+        OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        OUTPUT_FILE = os.path.join(OUTPUT_DIR, output_arg)
+else:
+    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    OUTPUT_FILE = os.path.join(OUTPUT_DIR, "document_rag_file_report.html")
+
 CSV_OUTPUT_FILE = OUTPUT_FILE.rsplit('.', 1)[0] + '.csv'
 
 if not DOCS_FILE or not RAG_FILES:

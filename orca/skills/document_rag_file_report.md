@@ -151,8 +151,12 @@ The skill provides a dedicated script `orca/scripts/document_rag_file_report/bat
    ```bash
    python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
      --config orca/assets/mcp_config.json \
-     --csv orca/assets/document_rag_file_report.csv
+     --csv orca/assets/document_rag_file_report.csv \
+     [--workspace-id <id>]
    ```
+   
+   The `--workspace-id` parameter is optional. If not specified, it defaults to workspace ID 1. For other workspaces, specify the correct ID (e.g., `--workspace-id 2`).
+
 2. **Batch Configuration**: The script is configured to use a batch size of **200** entries per call to maximize throughput while respecting API limits.
 3. **Monitor progress**: The script outputs per-batch progress and a final summary of successful and failed updates.
 

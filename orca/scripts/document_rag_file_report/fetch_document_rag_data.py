@@ -88,20 +88,27 @@ async def fetch_all(config, corpus_display_name):
 
         # Step 3: Find workspace and repository matching the corpus
         print("Fetching workspaces...")
-        result = await session.call_tool("list_workspaces", {"limit": 2**31 - 1})
+        result = await session.call_tool("list_workspaces", {})
         ws_content = _parse_content(result)
         workspaces = ws_content.get("workspaces", [])
+
+        # Extract corpus ID for matching (last segment of the resource name)
+        corpus_id = corpus_name.split('/')[-1] if '/' in corpus_name else corpus_name
+        print(f"Looking for repository with corpus ID: {corpus_id}")
 
         workspace_id = None
         repository_id = None
         for ws in workspaces:
             ws_id = ws.get("id") or ws.get("workspace_id")
             print(f"  Checking workspace {ws_id}...")
-            result = await session.call_tool("list_repositories", {"workspaceId": ws_id, "limit": 2**31 - 1})
+            result = await session.call_tool("list_repositories", {"workspaceId": ws_id})
             repo_content = _parse_content(result)
             repos = repo_content.get("repositories", [])
             for repo in repos:
-                if repo.get("corpus_name") == corpus_name:
+                repo_corpus = repo.get("corpus_name", "")
+                # Match by corpus ID (last segment) to handle different project ID formats
+                repo_corpus_id = repo_corpus.split('/')[-1] if '/' in repo_corpus else repo_corpus
+                if repo_corpus_id == corpus_id:
                     workspace_id = ws_id
                     repository_id = repo.get("id") or repo.get("repository_id")
                     print(f"Found: workspaceId={workspace_id}, repositoryId={repository_id}")

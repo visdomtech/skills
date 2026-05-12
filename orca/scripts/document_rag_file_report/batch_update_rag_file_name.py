@@ -18,8 +18,8 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 
-WORKSPACE_ID = 1
 BATCH_SIZE = 200
+DEFAULT_WORKSPACE_ID = None  # Will be auto-detected or use default
 
 
 def _parse_content(result):
@@ -65,7 +65,7 @@ def load_csv(csv_path):
     return entries
 
 
-async def process_batches(session, entries):
+async def process_batches(session, entries, workspace_id):
     total = len(entries)
     success = 0
     failed = []
@@ -78,7 +78,7 @@ async def process_batches(session, entries):
 
         try:
             result = await session.call_tool("set_rag_file_name", {
-                "workspaceId": WORKSPACE_ID,
+                "workspaceId": workspace_id,
                 "entries": batch,
             })
             if result.isError:
@@ -98,6 +98,8 @@ async def main():
     parser = argparse.ArgumentParser(description="Batch-update rag_file_name via MCP SDK")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--csv", required=True, help="Path to CSV file from generate_document_rag_file_report.py")
+    parser.add_argument("--workspace-id", type=int, default=DEFAULT_WORKSPACE_ID, 
+                        help="Workspace ID (optional, will prompt if not provided)")
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -119,8 +121,18 @@ async def main():
         raise SystemExit(1)
     print(f"Loaded {len(entries)} entries from {csv_path}")
 
+    # Determine workspace ID
+    workspace_id = args.workspace_id
+    if workspace_id is None:
+        print("\nNote: --workspace-id not specified.")
+        print("You can specify it with: --workspace-id <id>")
+        print("Using default workspace ID: 1")
+        workspace_id = 1
+    else:
+        print(f"Using workspace ID: {workspace_id}")
+
     async for session in get_mcp_session(config):
-        success, failed = await process_batches(session, entries)
+        success, failed = await process_batches(session, entries, workspace_id)
 
     print(f"\n{'='*60}")
     print(f"COMPLETE: {success}/{len(entries)} updated successfully")
