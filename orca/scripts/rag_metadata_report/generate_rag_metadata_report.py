@@ -112,7 +112,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
         # Try to get from Firestore cache first (unless force_refresh)
         if firestore_client and not force_refresh:
             try:
-                cached = get_rag_metadata(firestore_client, filename)
+                cached = await get_rag_metadata(firestore_client, filename)
                 if cached:
                     async with PROGRESS_LOCK:
                         PROGRESS_COUNTER += 1
@@ -144,10 +144,10 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                 # Save to Firestore cache if available
                 if firestore_client:
                     try:
-                        save_rag_metadata_to_cache(firestore_client, result, doc)
+                        await save_rag_metadata_to_cache(firestore_client, result, doc)
                     except Exception as e:
                         print(f"  Warning: Firestore cache write failed for {filename}: {e}", flush=True)
-                        
+
             except Exception as e:
                 print(f"  Warning: Failed to fetch metadata for {filename}: {e}", flush=True)
                 result = {
@@ -156,11 +156,11 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                     "metadata": [],
                     "error": str(e)
                 }
-                
+
                 # Still cache errors to avoid repeated failed attempts
                 if firestore_client:
                     try:
-                        save_rag_metadata_to_cache(firestore_client, result, doc)
+                        await save_rag_metadata_to_cache(firestore_client, result, doc)
                     except Exception:
                         pass
 
@@ -173,10 +173,10 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
     return result
 
 
-def save_rag_metadata_to_cache(firestore_client, result, doc):
+async def save_rag_metadata_to_cache(firestore_client, result, doc):
     """Helper to save metadata to Firestore cache."""
 
-    save_rag_metadata(
+    await save_rag_metadata(
         client=firestore_client,
         rag_file_name=result["rag_file_name"],
         filename=result["filename"],
@@ -395,26 +395,29 @@ async def main():
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     results = []
 
-    async for session in get_mcp_session(config):
-        tasks = [
-            fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh)
-            for doc in documents
-        ]
-        
-        # Use gather with return_exceptions to handle errors gracefully without crashing the task group
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for i, res in enumerate(raw_results):
-            if isinstance(res, Exception):
-                print(f"  Warning: Task {i} failed: {res}", flush=True)
-                results.append({
-                    "filename": documents[i].get("filename", "Unknown"),
-                    "rag_file_name": documents[i].get("rag_file_name", ""),
-                    "metadata": [],
-                    "error": str(res)
-                })
-            else:
-                results.append(res)
+    try:
+        async for session in get_mcp_session(config):
+            tasks = [
+                fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh)
+                for doc in documents
+            ]
+
+            # Use gather with return_exceptions to handle errors gracefully without crashing the task group
+            raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for i, res in enumerate(raw_results):
+                if isinstance(res, Exception):
+                    print(f"  Warning: Task {i} failed: {res}", flush=True)
+                    results.append({
+                        "filename": documents[i].get("filename", "Unknown"),
+                        "rag_file_name": documents[i].get("rag_file_name", ""),
+                        "metadata": [],
+                        "error": str(res)
+                    })
+                else:
+                    results.append(res)
+    finally:
+        await firestore_client.close()
 
     generate_csv(results)
     generate_html(results)

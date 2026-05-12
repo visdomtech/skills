@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Firestore client utilities for RAG metadata caching."""
+"""Firestore async client utilities for RAG metadata caching."""
 
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
@@ -10,45 +10,24 @@ from google.cloud import firestore
 RAG_METADATA_COLLECTION = "rag_metadata_cache"
 
 
-def get_firestore_client(project_id: Optional[str] = "visdomapp-1") -> firestore.Client:
-    return firestore.Client(project=project_id, database="regulations")
+def get_firestore_client(project_id: Optional[str] = "visdomapp-1") -> firestore.AsyncClient:
+    return firestore.AsyncClient(project=project_id, database="regulations")
 
 
-def _get_document_ref(client: firestore.Client, filename: str) -> firestore.DocumentReference:
-    """Get Firestore document reference for a RAG file.
-    
-    Uses the document filename as the document ID.
-    
-    Args:
-        client: Firestore client instance.
-        filename: Document filename.
-    
-    Returns:
-        Document reference.
-    """
+def _get_document_ref(client: firestore.AsyncClient, filename: str) -> firestore.AsyncDocumentReference:
     return client.collection(RAG_METADATA_COLLECTION).document(filename)
 
 
-def save_rag_metadata(
-    client: firestore.Client,
+async def save_rag_metadata(
+    client: firestore.AsyncClient,
     rag_file_name: str,
     filename: str,
     metadata: List[Dict[str, str]],
     document_data: Optional[Dict[str, Any]] = None,
     error: Optional[str] = None,
 ) -> None:
-    """Save RAG metadata to Firestore.
-    
-    Args:
-        client: Firestore client instance.
-        rag_file_name: Full RAG file resource name.
-        filename: Original document filename.
-        metadata: List of metadata entries (each with 'key' and 'value').
-        document_data: Optional original document data from MCP.
-        error: Optional error message if fetching failed.
-    """
     doc_ref = _get_document_ref(client, filename)
-    
+
     data = {
         "rag_file_name": rag_file_name,
         "filename": filename,
@@ -56,33 +35,23 @@ def save_rag_metadata(
         "cached_at": datetime.now(timezone.utc),
         "error": error,
     }
-    
+
     if document_data:
         data["document_data"] = document_data
-    
-    # Use merge to update existing documents without overwriting other fields
-    doc_ref.set(data, merge=True)
+
+    await doc_ref.set(data, merge=True)
 
 
-def get_rag_metadata(
-    client: firestore.Client,
+async def get_rag_metadata(
+    client: firestore.AsyncClient,
     filename: str,
 ) -> Optional[Dict[str, Any]]:
-    """Retrieve RAG metadata from Firestore cache.
-    
-    Args:
-        client: Firestore client instance.
-        filename: Document filename.
-    
-    Returns:
-        Dictionary with cached data if found, None otherwise.
-    """
     doc_ref = _get_document_ref(client, filename)
-    doc = doc_ref.get()
-    
+    doc = await doc_ref.get()
+
     if not doc.exists:
         return None
-    
+
     data = doc.to_dict()
     return {
         "filename": data.get("filename", ""),
@@ -94,29 +63,20 @@ def get_rag_metadata(
     }
 
 
-def batch_save_rag_metadata(
-    client: firestore.Client,
+async def batch_save_rag_metadata(
+    client: firestore.AsyncClient,
     results: List[Dict[str, Any]],
 ) -> int:
-    """Batch save multiple RAG metadata entries to Firestore.
-    
-    Args:
-        client: Firestore client instance.
-        results: List of result dictionaries from fetch operations.
-    
-    Returns:
-        Number of documents saved.
-    """
     batch = client.batch()
     count = 0
-    
+
     for res in results:
         filename = res.get("filename", "")
         if not filename:
             continue
-        
+
         doc_ref = _get_document_ref(client, filename)
-        
+
         data = {
             "rag_file_name": res.get("rag_file_name", ""),
             "filename": filename,
@@ -124,43 +84,31 @@ def batch_save_rag_metadata(
             "cached_at": datetime.now(timezone.utc),
             "error": res.get("error"),
         }
-        
+
         batch.set(doc_ref, data, merge=True)
         count += 1
-    
-    batch.commit()
+
+    await batch.commit()
     return count
 
 
-def clear_cache_for_workspace(
-    client: firestore.Client,
+async def clear_cache_for_workspace(
+    client: firestore.AsyncClient,
     workspace_id: int,
     repository_id: int,
 ) -> int:
-    """Clear cached metadata for a specific workspace/repository.
-    
-    Args:
-        client: Firestore client instance.
-        workspace_id: Workspace ID.
-        repository_id: Repository ID.
-    
-    Returns:
-        Number of documents deleted.
-    """
-    # Query documents by workspace/repository in document_data
     collection = client.collection(RAG_METADATA_COLLECTION)
     query = collection.where("document_data.ws", "==", workspace_id)
     query = query.where("document_data.repository_id", "==", repository_id)
-    
-    docs = query.stream()
+
     count = 0
     batch = client.batch()
-    
-    for doc in docs:
+
+    async for doc in query.stream():
         batch.delete(doc.reference)
         count += 1
-    
+
     if count > 0:
-        batch.commit()
-    
+        await batch.commit()
+
     return count
