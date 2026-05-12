@@ -417,7 +417,7 @@ async def main():
                 else:
                     results.append(res)
     finally:
-        await firestore_client.close()
+        firestore_client.close()
 
     generate_csv(results)
     generate_html(results)
