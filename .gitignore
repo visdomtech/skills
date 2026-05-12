@@ -6,3 +6,4 @@
 .DS_Store
 *.pyc
 assets
+__pycache__

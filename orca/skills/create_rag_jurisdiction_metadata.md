@@ -7,7 +7,7 @@ Creates `jurisdiction_code` metadata for RAG files by matching included regulati
 ## Prerequisites
 
 - Orca MCP server access
-- `uv` for Python environment management
+- `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - MCP config JSON (see Step 1)
 - Tools used: `list_regulations`, `list_documents`, `create_rag_metadata`, `update_rag_metadata`, `list_rag_metadata`
 - Workspace 1, Compliance Repository ID 6
@@ -44,12 +44,12 @@ The script automates the entire workflow:
 
 ```bash
 # Prepare virtual environment
-uv venv --allow-existing
-uv pip install mcp
+cd orca
+uv sync
 source .venv/bin/activate
 
 # Run script
-python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
+uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
 ```
 
 **Parameters:**
@@ -127,15 +127,15 @@ cat > orca/assets/mcp_config.json <<EOF
 EOF
 
 # 2. Prepare virtual environment and install SDK
-uv venv --allow-existing
-uv pip install mcp
+cd orca
+uv sync
 source .venv/bin/activate
 
 # 3. Run script
-python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
+uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
 
 # 4. Resume if interrupted (same command)
-python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
+uv run python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
 ```
 
 ### Output

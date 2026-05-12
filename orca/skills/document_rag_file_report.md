@@ -7,7 +7,7 @@ This skill describes how to generate a comprehensive HTML report that matches do
 ## Prerequisites
 
 - Access to the Orca MCP server
-- `uv` for Python environment management
+- `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - MCP config JSON
 
 ## Step 1: Fetch Data
@@ -16,15 +16,15 @@ Run the fetch script, which calls all required MCP tools via the MCP SDK and gen
 
 ```bash
 # Prepare virtual environment
-uv venv --allow-existing
-uv pip install mcp
+cd orca
+uv sync
 source .venv/bin/activate
 
 # Fetch data and generate report (default corpus: prod-s30-w1-r6-happy-quartz)
-python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py --config orca/assets/mcp_config.json
+uv run fetch-document-rag-data --config orca/assets/mcp_config.json
 
 # Specify a different corpus
-python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py \
+uv run fetch-document-rag-data \
   --config orca/assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r5-agile-wave \
   --output orca/assets/policy_rag_file_report.html
@@ -149,7 +149,7 @@ The skill provides a dedicated script `orca/scripts/document_rag_file_report/bat
 
 1. **Use the provided script**: Run the script with the path to the generated CSV file:
    ```bash
-   python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
+   uv run python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
      --config orca/assets/mcp_config.json \
      --csv orca/assets/document_rag_file_report.csv \
      [--workspace-id <id>]
@@ -221,18 +221,19 @@ The Python script at `orca/scripts/document_rag_file_report/generate_document_ra
 
 ```bash
 # 1. Fetch all data and generate initial report
-python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py --config orca/assets/mcp_config.json
+cd orca && uv sync && source .venv/bin/activate
+uv run fetch-document-rag-data --config orca/assets/mcp_config.json
 
 # 2. Open the initial report
 open orca/assets/document_rag_file_report.html
 
 # 3. Review the report and run batch updates from the generated CSV
-python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
+uv run python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
   --config orca/assets/mcp_config.json \
   --csv orca/assets/document_rag_file_report.csv
 
 # 4. Re-fetch to verify updates and generate verification report
-python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py \
+uv run fetch-document-rag-data \
   --config orca/assets/mcp_config.json \
   --output orca/assets/document_rag_file_report_verification.html
 

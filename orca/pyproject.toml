@@ -1,0 +1,28 @@
+[project]
+name = "orca-scripts"
+version = "0.1.0"
+description = "Orca MCP server helper scripts for RAG metadata, jurisdictions, and law changes reports"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.0.0",
+    "google-cloud-firestore>=2.0.0",
+    "httpx[socks]>=0.27.0",
+]
+
+[project.scripts]
+rag-metadata-report = "orca.scripts.rag_metadata_report.generate_rag_metadata_report:main"
+fetch-document-rag-data = "orca.scripts.document_rag_file_report.fetch_document_rag_data:main"
+
+[tool.uv]
+default-groups = "all"
+
+[tool.uv.build-backend]
+module-name = ["scripts"]
+module-root = ""
+source-exclude = ["assets", "cache", "skills"]
+source-include = []
+wheel-exclude = []
+
+[build-system]
+requires = ["uv_build>=0.11.5,<0.12.0"]
+build-backend = "uv_build"

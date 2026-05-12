@@ -7,7 +7,7 @@ This skill describes how to generate a comprehensive HTML report from Orca juris
 ## Prerequisites
 
 - Access to the Orca MCP server
-- `uv` for Python environment management
+- `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - MCP config JSON (see Step 1)
 
 ## Step 1: Prepare Environment and Run Script
@@ -16,15 +16,15 @@ Set up the Python environment and run the fetch script, which calls `list_jurisd
 
 ```bash
 # Prepare virtual environment
-uv venv --allow-existing
-uv pip install mcp
+cd orca
+uv sync
 source .venv/bin/activate
 
 # Run fetch + report generation
-python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json
+uv run python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json
 
 # Optional: specify a custom output path
-python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json --output orca/assets/my_report.html
+uv run python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json --output orca/assets/my_report.html
 ```
 
 The script:

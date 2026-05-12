@@ -11,7 +11,7 @@ This skill describes how to generate a comprehensive report on the jurisdiction 
 ## Prerequisites
 
 - Access to the Orca MCP server.
-- Python environment with `mcp` SDK installed (use `uv` as per project standards).
+- `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`).
 - **Optional**: Google Cloud credentials configured for Firestore access (for caching).
 - Workspace ID: 1, Repository ID: 6.
 - Documents data cached at `orca/assets/compliance_documents.json`.
@@ -21,10 +21,8 @@ This skill describes how to generate a comprehensive report on the jurisdiction 
 Before running the script, ensure your virtual environment is set up and dependencies are installed:
 
 ```bash
-uv venv --allow-existing
-uv pip install mcp
-uv pip install google-cloud-firestore
-uv pip install httpx[socks]
+cd orca
+uv sync
 source .venv/bin/activate
 ```
 
@@ -34,13 +32,13 @@ Execute the generation script using your MCP configuration:
 
 ```bash
 # Default: Uses Firestore cache if available
-python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json
+uv run rag-metadata-report --config orca/assets/mcp_config.json
 
 # Force refresh from MCP (ignore cache)
-python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json --force-refresh
+uv run rag-metadata-report --config orca/assets/mcp_config.json --force-refresh
 
 # Disable caching entirely
-python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json --no-cache
+uv run rag-metadata-report --config orca/assets/mcp_config.json --no-cache
 ```
 
 The script will:
