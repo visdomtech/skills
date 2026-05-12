@@ -6,10 +6,13 @@ This skill describes how to generate a comprehensive report on the jurisdiction 
 1. A detailed CSV file containing all metadata entries for every document.
 2. An HTML summary report highlighting jurisdiction distribution and identifying documents missing jurisdiction metadata.
 
+**Firestore Caching**: The script now supports Firestore caching to avoid expensive individual API calls to Vertex corpus (which doesn't support batching). On first run, metadata is fetched from MCP and cached in Firestore. Subsequent runs use cached data by default, dramatically improving performance.
+
 ## Prerequisites
 
 - Access to the Orca MCP server.
 - Python environment with `mcp` SDK installed (use `uv` as per project standards).
+- **Optional**: Google Cloud credentials configured for Firestore access (for caching).
 - Workspace ID: 1, Repository ID: 6.
 - Documents data cached at `orca/assets/compliance_documents.json`.
 
@@ -20,6 +23,8 @@ Before running the script, ensure your virtual environment is set up and depende
 ```bash
 uv venv --allow-existing
 uv pip install mcp
+uv pip install google-cloud-firestore
+uv pip install httpx[socks]
 source .venv/bin/activate
 ```
 
@@ -28,15 +33,24 @@ source .venv/bin/activate
 Execute the generation script using your MCP configuration:
 
 ```bash
+# Default: Uses Firestore cache if available
 python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json
+
+# Force refresh from MCP (ignore cache)
+python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json --force-refresh
+
+# Disable caching entirely
+python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json --no-cache
 ```
 
 The script will:
 1. Load the list of documents from `orca/assets/compliance_documents.json`.
 2. Connect to the Orca MCP server.
-3. Fetch metadata for each document's associated RAG file in parallel (concurrency limit: 3).
-4. Generate `orca/assets/rag_metadata_report.csv` with detailed metadata.
-5. Generate `orca/assets/rag_metadata_summary.html` with a visual summary.
+3. **Check Firestore cache** for each document's metadata (unless `--force-refresh` is used).
+4. Fetch missing metadata from MCP in parallel (concurrency limit: 3).
+5. **Cache fetched metadata in Firestore** for future use (unless `--no-cache` is used).
+6. Generate `orca/assets/rag_metadata_report.csv` with detailed metadata.
+7. Generate `orca/assets/rag_metadata_summary.html` with a visual summary.
 
 ## Output Files
 
@@ -59,5 +73,21 @@ A professional, Gmail-compatible HTML report containing:
 ## Implementation Details
 
 - **Parallel Processing**: The script uses `asyncio.Semaphore` to limit concurrent API calls, ensuring high performance without overwhelming the MCP server.
-- **Error Handling**: If metadata fetching fails for a specific document, the error is logged and recorded in the CSV, but processing continues for other documents.
+- **Firestore Caching**: Metadata is cached in Firestore collection `rag_metadata_cache` using the RAG file ID as the document key. This avoids repeated expensive API calls.
+- **Cache Strategy**: Firestore-first approach - checks cache before calling MCP, updates cache after fetching.
+- **Error Handling**: If metadata fetching fails for a specific document, the error is logged and recorded in the CSV, but processing continues for other documents. Failed attempts are also cached to prevent repeated failures.
 - **Progress Tracking**: The script prints progress updates to the console (e.g., "Processed 50/1300 documents...").
+- **Graceful Fallback**: If Firestore is unavailable or credentials are not configured, the script automatically falls back to direct MCP calls without caching.
+
+## Cache Management
+
+### When to Refresh Cache
+
+Refresh the cache when:
+- RAG metadata has been updated in the Vertex AI corpus
+- You suspect stale data in the cache
+- After running batch operations that modify RAG files
+
+### Clearing Cache
+
+To clear the cache for a specific workspace/repository, you can use the Firestore console or run a custom script using the `clear_cache_for_workspace()` function from `firestore_utils.py`.

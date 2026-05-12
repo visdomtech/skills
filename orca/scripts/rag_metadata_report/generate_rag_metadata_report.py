@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Generate RAG metadata report using MCP SDK.
+"""Generate RAG metadata report using MCP SDK with Firestore caching.
 
 Fetches metadata for all documents in the compliance repository and generates:
 1. A detailed CSV report of all metadata entries.
 2. An HTML summary report focusing on jurisdiction_code distribution and missing metadata.
+
+Uses Firestore cache to avoid expensive individual API calls when data is already cached.
 """
 
 import argparse
@@ -16,6 +18,8 @@ from pathlib import Path
 import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+
+from .firestore_utils import get_firestore_client, get_rag_metadata, batch_save_rag_metadata
 
 
 # Configuration
@@ -83,8 +87,17 @@ def _parse_content(result):
     return {}
 
 
-async def fetch_metadata(session, doc, semaphore, total):
-    """Fetch metadata for a single document with concurrency control."""
+async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, force_refresh=False):
+    """Fetch metadata for a single document with concurrency control and Firestore caching.
+    
+    Args:
+        session: MCP session.
+        doc: Document dictionary.
+        semaphore: Asyncio semaphore for concurrency control.
+        total: Total number of documents for progress tracking.
+        firestore_client: Optional Firestore client for caching.
+        force_refresh: If True, always fetch from MCP instead of using cache.
+    """
     global PROGRESS_COUNTER
     rag_name = doc.get("rag_file_name")
     filename = doc.get("filename", "Unknown")
@@ -97,6 +110,26 @@ async def fetch_metadata(session, doc, semaphore, total):
             "error": "No rag_file_name"
         }
     else:
+        # Try to get from Firestore cache first (unless force_refresh)
+        if firestore_client and not force_refresh:
+            try:
+                cached = get_rag_metadata(firestore_client, rag_name)
+                if cached:
+                    async with PROGRESS_LOCK:
+                        PROGRESS_COUNTER += 1
+                        if PROGRESS_COUNTER % 50 == 0:
+                            print(f"Processed {PROGRESS_COUNTER}/{total} documents...", flush=True)
+                    return {
+                        "filename": cached["filename"],
+                        "rag_file_name": cached["rag_file_name"],
+                        "metadata": cached["metadata"],
+                        "error": cached.get("error"),
+                    }
+            except Exception as e:
+                print(f"  Warning: Firestore cache read failed for {filename}: {e}", flush=True)
+                # Fall through to MCP fetch
+        
+        # Fetch from MCP
         async with semaphore:
             try:
                 api_result = await session.call_tool("list_rag_metadata", {"ragFileName": rag_name})
@@ -108,6 +141,14 @@ async def fetch_metadata(session, doc, semaphore, total):
                     "metadata": metadata,
                     "error": None
                 }
+                
+                # Save to Firestore cache if available
+                if firestore_client:
+                    try:
+                        save_rag_metadata_to_cache(firestore_client, result, doc)
+                    except Exception as e:
+                        print(f"  Warning: Firestore cache write failed for {filename}: {e}", flush=True)
+                        
             except Exception as e:
                 print(f"  Warning: Failed to fetch metadata for {filename}: {e}", flush=True)
                 result = {
@@ -116,6 +157,13 @@ async def fetch_metadata(session, doc, semaphore, total):
                     "metadata": [],
                     "error": str(e)
                 }
+                
+                # Still cache errors to avoid repeated failed attempts
+                if firestore_client:
+                    try:
+                        save_rag_metadata_to_cache(firestore_client, result, doc)
+                    except Exception:
+                        pass
 
     # Update progress
     async with PROGRESS_LOCK:
@@ -124,6 +172,20 @@ async def fetch_metadata(session, doc, semaphore, total):
             print(f"Processed {PROGRESS_COUNTER}/{total} documents...", flush=True)
     
     return result
+
+
+def save_rag_metadata_to_cache(firestore_client, result, doc):
+    """Helper to save metadata to Firestore cache."""
+    from firestore_utils import save_rag_metadata
+    
+    save_rag_metadata(
+        client=firestore_client,
+        rag_file_name=result["rag_file_name"],
+        filename=result["filename"],
+        metadata=result["metadata"],
+        document_data=doc,
+        error=result.get("error"),
+    )
 
 
 def generate_csv(results):
@@ -314,6 +376,8 @@ def generate_html(results):
 async def main():
     parser = argparse.ArgumentParser(description="Generate RAG metadata report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
+    parser.add_argument("--force-refresh", action="store_true", help="Force refresh from MCP, ignore cache")
+    parser.add_argument("--no-cache", action="store_true", help="Disable Firestore caching")
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -327,11 +391,27 @@ async def main():
     documents = load_documents()
     print(f"Loaded {len(documents)} documents", flush=True)
 
+    # Initialize Firestore client if caching is enabled
+    firestore_client = None
+    if not args.no_cache:
+        try:
+            firestore_client = get_firestore_client()
+            print("Firestore caching enabled", flush=True)
+        except Exception as e:
+            print(f"Warning: Firestore initialization failed ({e}), proceeding without cache", flush=True)
+            firestore_client = None
+    
+    if args.force_refresh:
+        print("Force refresh mode: ignoring cache", flush=True)
+
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     results = []
 
     async for session in get_mcp_session(config):
-        tasks = [fetch_metadata(session, doc, semaphore, len(documents)) for doc in documents]
+        tasks = [
+            fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh)
+            for doc in documents
+        ]
         
         # Use gather with return_exceptions to handle errors gracefully without crashing the task group
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
