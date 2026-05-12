@@ -19,7 +19,7 @@ from mcp.client.streamable_http import streamablehttp_client
 ASSETS_DIR = Path("orca/assets")
 JURISDICTIONS_FILE = ASSETS_DIR / "jurisdictions.json"
 DEFAULT_OUTPUT = ASSETS_DIR / "jurisdictions_report.html"
-GENERATE_SCRIPT = Path("orca/scripts/generate_jurisdictions_report.py")
+GENERATE_SCRIPT = Path("orca/scripts/jurisdictions_report/generate_jurisdictions_report.py")
 
 
 def _parse_content(result):

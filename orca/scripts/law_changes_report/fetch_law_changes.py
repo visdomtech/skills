@@ -22,7 +22,7 @@ from mcp.client.streamable_http import streamablehttp_client
 ASSETS_DIR = Path("orca/assets")
 LAW_CHANGES_FILE = ASSETS_DIR / "law_changes.json"
 DEFAULT_OUTPUT = ASSETS_DIR / "law_changes_report.html"
-GENERATE_SCRIPT = Path("orca/scripts/generate_law_changes_report.py")
+GENERATE_SCRIPT = Path("orca/scripts/law_changes_report/generate_law_changes_report.py")
 
 
 def _parse_content(result):

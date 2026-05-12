@@ -21,10 +21,10 @@ uv pip install mcp
 source .venv/bin/activate
 
 # Fetch data and generate report (default corpus: prod-s30-w1-r6-happy-quartz)
-python3 orca/scripts/fetch_document_rag_data.py --config orca/assets/mcp_config.json
+python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py --config orca/assets/mcp_config.json
 
 # Specify a different corpus
-python3 orca/scripts/fetch_document_rag_data.py \
+python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py \
   --config orca/assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r5-agile-wave \
   --output orca/assets/policy_rag_file_report.html
@@ -58,12 +58,12 @@ The script:
 
 ## Step 2: Analyze & Match
 
-Use the script `orca/scripts/generate_document_rag_file_report.py` to perform matching and generate the report.
+Use the script `orca/scripts/document_rag_file_report/generate_document_rag_file_report.py` to perform matching and generate the report.
 
 ### Script Usage
 
 ```bash
-python3 orca/scripts/generate_document_rag_file_report.py <path_to_documents_cache> <path_to_rag_files_cache> [output_file]
+python3 orca/scripts/document_rag_file_report/generate_document_rag_file_report.py <path_to_documents_cache> <path_to_rag_files_cache> [output_file]
 ```
 
 **Parameters:**
@@ -145,11 +145,11 @@ After reviewing the report, resolve all documents that need `rag_file_name` upda
 
 ### Batch Update Workflow
 
-The skill provides a dedicated script `orca/scripts/batch_update_rag_file_name.py` that reads the generated CSV and calls `set_rag_file_name` directly via the MCP SDK in optimized batches.
+The skill provides a dedicated script `orca/scripts/document_rag_file_report/batch_update_rag_file_name.py` that reads the generated CSV and calls `set_rag_file_name` directly via the MCP SDK in optimized batches.
 
 1. **Use the provided script**: Run the script with the path to the generated CSV file:
    ```bash
-   python3 orca/scripts/batch_update_rag_file_name.py \
+   python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
      --config orca/assets/mcp_config.json \
      --csv orca/assets/document_rag_file_report.csv
    ```
@@ -181,7 +181,7 @@ Call `list_documents` again with the same `workspaceId` and `repositoryId`:
 Generate a new report using the updated documents cache and the original RAG files cache:
 
 ```bash
-python3 orca/scripts/generate_document_rag_file_report.py \
+python3 orca/scripts/document_rag_file_report/generate_document_rag_file_report.py \
   orca/assets/orca_cache_{new_docs_hash}.json \
   orca/assets/orca_cache_970ee63a14ba2333.json \
   document_rag_file_report_verification.html
@@ -211,24 +211,24 @@ If any documents still appear in the "Empty/Null" or "Different" categories afte
 
 ## Automated Script
 
-The Python script at `orca/scripts/generate_document_rag_file_report.py` automates Steps 2 and 3 (analysis + HTML generation).
+The Python script at `orca/scripts/document_rag_file_report/generate_document_rag_file_report.py` automates Steps 2 and 3 (analysis + HTML generation).
 
 ### End-to-End Workflow
 
 ```bash
 # 1. Fetch all data and generate initial report
-python3 orca/scripts/fetch_document_rag_data.py --config orca/assets/mcp_config.json
+python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py --config orca/assets/mcp_config.json
 
 # 2. Open the initial report
 open orca/assets/document_rag_file_report.html
 
 # 3. Review the report and run batch updates from the generated CSV
-python3 orca/scripts/batch_update_rag_file_name.py \
+python3 orca/scripts/document_rag_file_report/batch_update_rag_file_name.py \
   --config orca/assets/mcp_config.json \
   --csv orca/assets/document_rag_file_report.csv
 
 # 4. Re-fetch to verify updates and generate verification report
-python3 orca/scripts/fetch_document_rag_data.py \
+python3 orca/scripts/document_rag_file_report/fetch_document_rag_data.py \
   --config orca/assets/mcp_config.json \
   --output orca/assets/document_rag_file_report_verification.html
 

@@ -21,10 +21,10 @@ uv pip install mcp
 source .venv/bin/activate
 
 # Run fetch + report generation
-python3 orca/scripts/fetch_jurisdictions.py --config orca/assets/mcp_config.json
+python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json
 
 # Optional: specify a custom output path
-python3 orca/scripts/fetch_jurisdictions.py --config orca/assets/mcp_config.json --output orca/assets/my_report.html
+python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json --output orca/assets/my_report.html
 ```
 
 The script:
@@ -296,7 +296,7 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 Fetches jurisdictions from the Orca MCP server and generates the HTML report in one command.
 
 ```bash
-python3 orca/scripts/fetch_jurisdictions.py --config orca/assets/mcp_config.json [--output <path>]
+python3 orca/scripts/jurisdictions_report/fetch_jurisdictions.py --config orca/assets/mcp_config.json [--output <path>]
 ```
 
 Saves raw data to `orca/assets/jurisdictions.json`, then invokes `generate_jurisdictions_report.py` automatically.
@@ -306,7 +306,7 @@ Saves raw data to `orca/assets/jurisdictions.json`, then invokes `generate_juris
 Can also be run standalone on previously fetched data:
 
 ```bash
-python3 orca/scripts/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
+python3 orca/scripts/jurisdictions_report/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
 ```
 
 **Parameters:**

@@ -28,7 +28,7 @@ source .venv/bin/activate
 Execute the generation script using your MCP configuration:
 
 ```bash
-python3 orca/scripts/generate_rag_metadata_report.py --config orca/assets/mcp_config.json
+python3 orca/scripts/rag_metadata_report/generate_rag_metadata_report.py --config orca/assets/mcp_config.json
 ```
 
 The script will:

@@ -49,7 +49,7 @@ uv pip install mcp
 source .venv/bin/activate
 
 # Run script
-python3 orca/scripts/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
+python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
 ```
 
 **Parameters:**
@@ -132,10 +132,10 @@ uv pip install mcp
 source .venv/bin/activate
 
 # 3. Run script
-python3 orca/scripts/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
+python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
 
 # 4. Resume if interrupted (same command)
-python3 orca/scripts/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
+python3 orca/scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config orca/assets/mcp_config.json
 ```
 
 ### Output

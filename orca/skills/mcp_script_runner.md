@@ -50,7 +50,7 @@ pip install mcp
 
 ## Step 1: Generate the Script
 
-When the user provides an MCP server config and describes a batch task, generate a complete Python script using the template from `orca/scripts/mcp_script_template.py`.
+When the user provides an MCP server config and describes a batch task, generate a complete Python script using the template from `orca/scripts/mcp_script_runner/mcp_script_template.py`.
 
 ### Required Inputs from User
 

@@ -4,7 +4,7 @@
 
 Send an email via the Orca MCP `send_email` tool. Supports plain-text and HTML bodies, CC/BCC, and file attachments of any type.
 
-**For emails with file attachments**, always use the helper script `orca/scripts/send_email.py` — it handles base64-encoding automatically so you never have to encode files manually.
+**For emails with file attachments**, always use the helper script `orca/scripts/send_email/send_email.py` — it handles base64-encoding automatically so you never have to encode files manually.
 
 ## Prerequisites
 
@@ -42,12 +42,12 @@ Call `mcp__orca__send_email` directly with:
 
 ## Workflow B — Email with file attachments
 
-Use `orca/scripts/send_email.py` to base64-encode the files, then pass the output payload to `mcp__orca__send_email`.
+Use `orca/scripts/send_email/send_email.py` to base64-encode the files, then pass the output payload to `mcp__orca__send_email`.
 
 ### Step 1: Generate the payload
 
 ```bash
-python3 orca/scripts/send_email.py \
+python3 orca/scripts/send_email/send_email.py \
   --to recipient@example.com \
   --subject "Law Changes Report" \
   --text "Please find the report attached." \
@@ -64,7 +64,7 @@ In practice, run the script in Python and capture the output:
 import subprocess, json
 
 result = subprocess.run(
-    ["python3", "orca/scripts/send_email.py",
+    ["python3", "orca/scripts/send_email/send_email.py",
      "--to", "recipient@example.com",
      "--subject", "Report",
      "--text", "See attached.",
@@ -91,7 +91,7 @@ payload = json.loads(result.stdout)
 ### Sending an HTML file as both body and attachment
 
 ```bash
-python3 orca/scripts/send_email.py \
+python3 orca/scripts/send_email/send_email.py \
   --to recipient@example.com \
   --subject "Law Changes Report" \
   --html orca/law_changes_report.html \
