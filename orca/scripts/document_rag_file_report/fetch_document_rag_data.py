@@ -139,7 +139,7 @@ async def fetch_all(config, corpus_display_name):
         return rag_files, documents, rag_content, doc_content
 
 
-async def main():
+async def async_main():
     parser = argparse.ArgumentParser(description="Fetch document/RAG data and generate matching report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--corpus-display-name", default=DEFAULT_CORPUS_DISPLAY_NAME,
@@ -175,9 +175,8 @@ async def main():
     print(f"\nDone. Report saved to {args.output}")
 
 
-def async_main():
-    """Entry point for console script (uv handles asyncio)."""
-    asyncio.run(main())
+def main():
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

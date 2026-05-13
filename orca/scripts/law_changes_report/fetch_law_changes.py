@@ -75,7 +75,7 @@ async def fetch_law_changes(config, since_date, change_type=None, jurisdiction=N
         return changes
 
 
-async def main():
+async def async_main():
     parser = argparse.ArgumentParser(description="Fetch law changes and generate report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--since-date", help="Fetch changes since this date (YYYY-MM-DD). Defaults to 7 days ago.")
@@ -118,6 +118,10 @@ async def main():
         raise SystemExit(result.returncode)
 
     print(f"\nDone. Report saved to {output_path}")
+
+
+def main():
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

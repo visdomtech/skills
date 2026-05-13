@@ -66,7 +66,7 @@ async def fetch_jurisdictions(config):
         return jurisdictions
 
 
-async def main():
+async def async_main():
     parser = argparse.ArgumentParser(description="Fetch jurisdictions and generate report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Output HTML file path")
@@ -100,6 +100,10 @@ async def main():
         raise SystemExit(result.returncode)
 
     print(f"\nDone. Report saved to {args.output}")
+
+
+def main():
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

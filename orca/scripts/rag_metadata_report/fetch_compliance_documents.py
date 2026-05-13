@@ -76,7 +76,7 @@ async def fetch_documents(config):
         return doc_content
 
 
-async def main():
+async def async_main():
     parser = argparse.ArgumentParser(description="Fetch compliance documents for RAG metadata report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     args = parser.parse_args()
@@ -97,9 +97,8 @@ async def main():
     print("Done.")
 
 
-def async_main():
-    """Entry point for console script (uv handles asyncio)."""
-    asyncio.run(main())
+def main():
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":
