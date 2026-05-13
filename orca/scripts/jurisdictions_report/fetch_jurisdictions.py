@@ -10,6 +10,7 @@ import asyncio
 import json
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -45,6 +46,7 @@ def _parse_content(result):
     return {}
 
 
+@asynccontextmanager
 async def get_mcp_session(config):
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
@@ -58,7 +60,7 @@ async def get_mcp_session(config):
 
 async def fetch_jurisdictions(config):
     print("Fetching jurisdictions...")
-    async for session in get_mcp_session(config):
+    async with get_mcp_session(config) as session:
         result = await session.call_tool("list_jurisdictions", {"limit": 2**31 - 1})
         content = _parse_content(result)
         jurisdictions = content.get("jurisdictions", [])
@@ -103,8 +105,9 @@ async def async_main():
 
 
 def main():
+    """Entry point for console script (uv handles asyncio)."""
     asyncio.run(async_main())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

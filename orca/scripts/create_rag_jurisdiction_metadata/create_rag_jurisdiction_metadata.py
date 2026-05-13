@@ -12,6 +12,7 @@ Usage:
 import argparse
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -54,6 +55,7 @@ def save_progress(state):
     temp.write_text(json.dumps(state, indent=2))
     temp.rename(PROGRESS_FILE)
 
+@asynccontextmanager
 async def get_mcp_session(config):
     """Yield an initialized MCP session via HTTP/SSE."""
     if config.get("type") != "http":
@@ -251,7 +253,7 @@ async def main():
     config = json.loads(config_path.read_text())
     print(f"Config loaded from {config_path} (URL: {config.get('url')})")
 
-    async for session in get_mcp_session(config):
+    async with get_mcp_session(config) as session:
         regs = await fetch_regulations(session)
         doc_map = await fetch_documents(session)
         matches = match_regulations(regs, doc_map)

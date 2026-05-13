@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import csv
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,6 +48,7 @@ def load_documents():
     return data.get("documents", [])
 
 
+@asynccontextmanager
 async def get_mcp_session(config):
     """Yield an initialized MCP session via HTTP/SSE."""
     if config.get("type") != "http":
@@ -396,7 +398,7 @@ async def main():
     results = []
 
     try:
-        async for session in get_mcp_session(config):
+        async with get_mcp_session(config) as session:
             tasks = [
                 fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh)
                 for doc in documents

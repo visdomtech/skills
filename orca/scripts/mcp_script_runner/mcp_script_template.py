@@ -7,6 +7,7 @@ Replace placeholder values and logic as needed for your specific task.
 import asyncio
 import json
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from mcp import ClientSession
 from mcp.client.sse import sse_client
@@ -40,6 +41,7 @@ def save_progress(state):
 
 
 # --- MCP client setup ---
+@asynccontextmanager
 async def get_mcp_session():
     """Connect to MCP server based on transport type."""
     if MCP_CONFIG["type"] == "http":
@@ -73,7 +75,7 @@ async def main():
 
     print(f"Loaded progress: {len(processed_ids)} items already processed")
 
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         # Step 1: Fetch data to process
         # TODO: Replace with the appropriate list_tool for your task
         data_result = await session.call_tool(

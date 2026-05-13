@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import csv
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -45,6 +46,7 @@ def _parse_content(result):
     return {}
 
 
+@asynccontextmanager
 async def get_mcp_session(config):
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
@@ -134,7 +136,7 @@ async def main():
     else:
         print(f"Using workspace ID: {workspace_id}")
 
-    async for session in get_mcp_session(config):
+    async with get_mcp_session(config) as session:
         success, failed = await process_batches(session, entries, workspace_id)
 
     print(f"\n{'='*60}")
