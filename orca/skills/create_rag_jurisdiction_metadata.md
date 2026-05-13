@@ -48,7 +48,7 @@ cd orca
 uv sync
 
 # Run script
-uv run python3 scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config <path_to_mcp_config.json>
+uv run create-rag-jurisdiction-metadata --config <path_to_mcp_config.json>
 ```
 
 **Parameters:**
@@ -130,10 +130,10 @@ cd orca
 uv sync
 
 # 3. Run script
-uv run python3 scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config assets/mcp_config.json
+uv run create-rag-jurisdiction-metadata --config assets/mcp_config.json
 
 # 4. Resume if interrupted (same command)
-uv run python3 scripts/create_rag_jurisdiction_metadata/create_rag_jurisdiction_metadata.py --config assets/mcp_config.json
+uv run create-rag-jurisdiction-metadata --config assets/mcp_config.json
 ```
 
 ### Output

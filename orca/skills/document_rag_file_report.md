@@ -148,9 +148,9 @@ The skill provides a dedicated script `scripts/document_rag_file_report/batch_up
 
 1. **Use the provided script**: Run the script with the path to the generated CSV file:
    ```bash
-   uv run python3 scripts/document_rag_file_report/batch_update_rag_file_name.py \
+   uv run batch-update-rag-file-name \
      --config assets/mcp_config.json \
-     --csv assets/document_rag_file_report.csv \
+     --csv assets/document_rag_file_report.csv
      [--workspace-id <id>]
    ```
    
@@ -227,7 +227,7 @@ uv run fetch-document-rag-data --config assets/mcp_config.json
 open assets/document_rag_file_report.html
 
 # 3. Review the report and run batch updates from the generated CSV
-uv run python3 scripts/document_rag_file_report/batch_update_rag_file_name.py \
+uv run batch-update-rag-file-name \
   --config assets/mcp_config.json \
   --csv assets/document_rag_file_report.csv
 

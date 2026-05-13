@@ -22,17 +22,17 @@ cd orca
 uv sync
 
 # Run with defaults (fetches last 7 days)
-uv run python3 scripts/law_changes_report/fetch_law_changes.py --config assets/mcp_config.json
+uv run fetch-law-changes --config assets/mcp_config.json
 
 # Run with specific date range and filters
-uv run python3 scripts/law_changes_report/fetch_law_changes.py \
+uv run fetch-law-changes \
   --config assets/mcp_config.json \
   --since-date 2026-04-15 \
   --date-label "April 15 - May 12, 2026" \
   --output assets/law_changes_report.html
 
 # Filter by change type or jurisdiction
-uv run python3 scripts/law_changes_report/fetch_law_changes.py \
+uv run fetch-law-changes \
   --config assets/mcp_config.json \
   --change-type "New Law" \
   --jurisdiction "US-CA"

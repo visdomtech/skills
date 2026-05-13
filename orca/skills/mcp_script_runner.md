@@ -271,7 +271,7 @@ After generating the script:
    ```
 3. **Run it**:
    ```bash
-   python3 scripts/<task_name>.py
+   uv run python3 scripts/<task_name>.py
    ```
 4. **Monitor output** — The script prints progress for each batch
 5. **Resume if interrupted** — Simply re-run the same command; it will skip already-processed items

@@ -2,7 +2,8 @@
 """Send an email via the Orca MCP send_email tool, with optional file attachments.
 
 Usage:
-    python3 orca/scripts/send_email.py \\
+    uv run send-email \\
+        --config assets/mcp_config.json \\
         --to recipient@example.com \\
         --subject "My Subject" \\
         --text "Body text" \\
@@ -13,9 +14,8 @@ Usage:
         [--cc cc@example.com] \\
         [--bcc bcc@example.com]
 
-The script base64-encodes each attachment and prints a JSON payload to stdout
-that can be piped directly into the Orca MCP send_email tool, or it can call
-the tool via the MCP HTTP endpoint if ORCA_MCP_URL is set in the environment.
+The script base64-encodes each attachment and invokes the Orca MCP send_email tool
+directly using the MCP Python SDK.
 
 Exit codes:
     0  success
@@ -25,12 +25,21 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import json
 import mimetypes
-import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
+
+import httpx
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+
+
+ASSETS_DIR = Path("assets")
+DEFAULT_CONFIG = ASSETS_DIR / "mcp_config.json"
 
 
 def encode_attachment(path: str) -> dict:
@@ -68,15 +77,48 @@ def build_payload(args: argparse.Namespace) -> dict:
     return payload
 
 
+@asynccontextmanager
+async def get_mcp_session(config):
+    """Yield an initialized MCP session via HTTP/SSE."""
+    if config.get("type") != "http":
+        raise ValueError(f"Unsupported transport: {config['type']}")
+    client = httpx.AsyncClient(headers=config.get("headers", {}))
+    async with client:
+        async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                yield session
+
+
+async def send_email_async(args: argparse.Namespace) -> None:
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(f"Error: Config not found: {config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    config = json.loads(config_path.read_text())
+    payload = build_payload(args)
+
+    print(f"Sending email to {', '.join(args.to)}...")
+    async with get_mcp_session(config) as session:
+        result = await session.call_tool("send_email", payload)
+        # Check for errors in the result
+        if hasattr(result, 'isError') and result.isError:
+            print(f"Error sending email: {result.content}", file=sys.stderr)
+            sys.exit(1)
+        print("Email sent successfully.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Send email via Orca MCP, with optional file attachments."
     )
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Path to MCP config JSON")
     parser.add_argument("--to", nargs="+", required=True, metavar="EMAIL",
                         help="Recipient address(es)")
     parser.add_argument("--subject", required=True, help="Email subject")
-    parser.add_argument("--from", dest="from_addr", default="warren@doublefin.ai",
-                        metavar="EMAIL", help="Sender address (default: warren@doublefin.ai)")
+    parser.add_argument("--from", dest="from_addr", default="support@doublefin.com",
+                        metavar="EMAIL", help="Sender address")
     parser.add_argument("--text", help="Plain-text body")
     parser.add_argument("--html", metavar="FILE",
                         help="Path to an HTML file to use as the email body")
@@ -89,10 +131,7 @@ def main() -> None:
     if not args.text and not args.html:
         parser.error("At least one of --text or --html is required.")
 
-    payload = build_payload(args)
-
-    # Output the payload as JSON for the MCP tool or caller to consume
-    print(json.dumps(payload))
+    asyncio.run(send_email_async(args))
 
 
 if __name__ == "__main__":
