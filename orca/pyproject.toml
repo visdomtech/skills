@@ -18,6 +18,7 @@ fetch-jurisdictions = "scripts.jurisdictions_report.fetch_jurisdictions:main"
 fetch-law-changes = "scripts.law_changes_report.fetch_law_changes:main"
 create-rag-jurisdiction-metadata = "scripts.create_rag_jurisdiction_metadata.create_rag_jurisdiction_metadata:main"
 batch-update-rag-file-name = "scripts.document_rag_file_report.batch_update_rag_file_name:main"
+build-jurisdiction-codes-cache = "scripts.rag_metadata_report.build_jurisdiction_codes_cache:main"
 
 [tool.uv]
 default-groups = "all"

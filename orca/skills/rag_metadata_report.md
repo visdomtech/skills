@@ -85,3 +85,31 @@ Refresh the cache when:
 ### Clearing Cache
 
 To clear the cache for a specific workspace/repository, you can use the Firestore console or run a custom script using the `clear_cache_for_workspace()` function from `firestore_utils.py`.
+
+## Jurisdiction Codes Cache
+
+Because `rag_metadata_cache` holds per-document metadata, a second derived cache aggregates all distinct `jurisdiction_code` values used across the collection into a single Firestore document for fast lookup.
+
+### Firestore Path
+
+```
+regulations (database)
+  └── rag_metadata_summary (collection)
+        └── jurisdiction_codes (document)
+              ├── codes: ["US", "US-AL", "US-CA", ...]   # sorted list of distinct codes
+              ├── count: 52                               # number of distinct codes
+              └── updated_at: <UTC timestamp>
+```
+
+### When to Run
+
+Run this after `rag-metadata-report` has populated (or updated) the `rag_metadata_cache` collection.
+
+### Command
+
+```bash
+cd orca
+uv run build-jurisdiction-codes-cache
+```
+
+The script streams all documents from `rag_metadata_cache`, collects every distinct `jurisdiction_code` value, and writes the sorted list to `rag_metadata_summary/jurisdiction_codes`.

@@ -92,6 +92,27 @@ async def batch_save_rag_metadata(
     return count
 
 
+RAG_METADATA_SUMMARY_COLLECTION = "rag_metadata_summary"
+JURISDICTION_CODES_DOCUMENT = "jurisdiction_codes"
+
+
+async def save_jurisdiction_codes(client: firestore.AsyncClient, codes: set) -> None:
+    doc_ref = client.collection(RAG_METADATA_SUMMARY_COLLECTION).document(JURISDICTION_CODES_DOCUMENT)
+    await doc_ref.set({
+        "codes": sorted(codes),
+        "count": len(codes),
+        "updated_at": datetime.now(timezone.utc),
+    })
+
+
+async def get_jurisdiction_codes(client: firestore.AsyncClient) -> Optional[List[str]]:
+    doc_ref = client.collection(RAG_METADATA_SUMMARY_COLLECTION).document(JURISDICTION_CODES_DOCUMENT)
+    doc = await doc_ref.get()
+    if not doc.exists:
+        return None
+    return doc.to_dict().get("codes", [])
+
+
 async def clear_cache_for_workspace(
     client: firestore.AsyncClient,
     workspace_id: int,
