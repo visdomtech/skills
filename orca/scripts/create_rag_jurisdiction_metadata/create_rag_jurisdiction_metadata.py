@@ -20,6 +20,8 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from scripts.rag_metadata_report.firestore_utils import get_firestore_client, get_rag_metadata, save_rag_metadata
+
 
 # Configuration
 WORKSPACE_ID = 1
@@ -60,7 +62,8 @@ async def get_mcp_session(config):
     """Yield an initialized MCP session via HTTP/SSE."""
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
-    client = httpx.AsyncClient(headers=config.get("headers", {}))
+    # Set a longer timeout (60s) to handle slow MCP tool responses
+    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=60.0)
     async with client:
         async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
             async with ClientSession(read_stream, write_stream) as session:
@@ -102,13 +105,18 @@ def _parse_content(result):
 
 async def fetch_regulations(session):
     """Return included regulations for the workspace."""
-    print("Fetching regulations...")
-    result = await session.call_tool("list_regulations", {"workspaceId": WORKSPACE_ID, "limit": 2**31 - 1})
-    content = _parse_content(result)
-    regs = content.get("regulations", [])
-    included = [r for r in regs if r.get("included")]
-    print(f"Found {len(included)} included regulations out of {len(regs)} total")
-    return included
+    print("Fetching regulations...", flush=True)
+    try:
+        result = await session.call_tool("list_regulations", {"workspaceId": WORKSPACE_ID, "limit": 2**31 - 1})
+        print("Regulations API call completed", flush=True)
+        content = _parse_content(result)
+        regs = content.get("regulations", [])
+        included = [r for r in regs if r.get("included")]
+        print(f"Found {len(included)} included regulations out of {len(regs)} total", flush=True)
+        return included
+    except Exception as e:
+        print(f"Error fetching regulations: {e}", flush=True)
+        raise
 
 async def fetch_documents(session):
     """Return a map of filename → rag_file_name."""
@@ -157,25 +165,57 @@ def save_batches(matches):
         print(f"  Created {path.name} with {len(chunk)} entries")
     return paths
 
-async def check_metadata(session, rag):
+async def check_metadata(session, rag, firestore_client=None):
     """Return existing jurisdiction_code value or None."""
+    filename = rag.split('/')[-1] if '/' in rag else rag
+
+    # Try to get from Firestore cache first
+    if firestore_client:
+        try:
+            cached = await get_rag_metadata(firestore_client, filename)
+            if cached:
+                # Extract jurisdiction_code from cached metadata
+                metadata = cached.get("metadata", [])
+                for entry in metadata:
+                    if entry.get("key") == "jurisdiction_code":
+                        return entry.get("value")
+        except Exception as e:
+            print(f"    Warning: Firestore cache read failed for {filename}: {e}")
+
+    # Fetch from MCP
     try:
         result = await session.call_tool("list_rag_metadata", {"ragFileName": rag})
         content = _parse_content(result)
         entries = content.get("metadata") or []
+        value = None
         for entry in entries:
             if entry.get("key") == "jurisdiction_code":
-                return entry.get("value")
+                value = entry.get("value")
+                break
+
+        # Cache the result if client is available
+        if firestore_client:
+            try:
+                await save_rag_metadata(
+                    client=firestore_client,
+                    rag_file_name=rag,
+                    filename=filename,
+                    metadata=entries,
+                )
+            except Exception as e:
+                print(f"    Warning: Firestore cache write failed for {filename}: {e}")
+
+        return value
     except Exception as e:
         print(f"    Warning: Failed to check metadata: {e}")
-    return None
+        return None
 
-async def upsert_metadata(session, rag, entries, expected):
+async def upsert_metadata(session, rag, entries, expected, firestore_client=None):
     """Create or update metadata after checking existing state.
     
     Returns (success: bool, message: str).
     """
-    current = await check_metadata(session, rag)
+    current = await check_metadata(session, rag, firestore_client)
     if current == expected:
         return True, "Skipped"
 
@@ -185,14 +225,14 @@ async def upsert_metadata(session, rag, entries, expected):
 
         # Handle false-negative INTERNAL errors
         if result.isError and "INTERNAL" in str(result.content):
-            verified = await check_metadata(session, rag)
+            verified = await check_metadata(session, rag, firestore_client)
             if verified == expected:
                 return True, "Created & Verified (false negative)"
             return False, "Failed verification after INTERNAL error"
 
         # Normal verification for updates
         if current is not None:
-            verified = await check_metadata(session, rag)
+            verified = await check_metadata(session, rag, firestore_client)
             if verified != expected:
                 return False, f"Verification mismatch: expected {expected}, got {verified}"
 
@@ -200,7 +240,7 @@ async def upsert_metadata(session, rag, entries, expected):
     except Exception as e:
         return False, f"Exception: {e}"
 
-async def process_batches(session, batch_paths, total):
+async def process_batches(session, batch_paths, total, firestore_client=None):
     """Process batch files with checkpoint resumption."""
     progress = load_progress()
     progress["total_entries"] = total
@@ -223,7 +263,7 @@ async def process_batches(session, batch_paths, total):
 
         for i in range(idx, len(entries)):
             entry = entries[i]
-            ok, msg = await upsert_metadata(session, entry["ragFileName"], entry["entries"], entry["entries"][0]["valueStr"])
+            ok, msg = await upsert_metadata(session, entry["ragFileName"], entry["entries"], entry["entries"][0]["valueStr"], firestore_client)
             if ok:
                 progress["completed_entries"] += 1
             else:
@@ -240,10 +280,18 @@ async def process_batches(session, batch_paths, total):
 
     return progress
 
-async def main():
+
+def main():
+    """Entry point for console script."""
+    asyncio.run(async_main())
+
+
+async def async_main():
+    print("Script starting...", flush=True)
     parser = argparse.ArgumentParser(description="Create RAG jurisdiction metadata")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     args = parser.parse_args()
+    print(f"Arguments parsed: {args}", flush=True)
 
     config_path = Path(args.config)
     if not config_path.exists():
@@ -251,18 +299,25 @@ async def main():
         raise SystemExit(1)
 
     config = json.loads(config_path.read_text())
-    print(f"Config loaded from {config_path} (URL: {config.get('url')})")
+    print(f"Config loaded from {config_path} (URL: {config.get('url')})", flush=True)
 
-    async with get_mcp_session(config) as session:
-        regs = await fetch_regulations(session)
-        doc_map = await fetch_documents(session)
-        matches = match_regulations(regs, doc_map)
-        if not matches:
-            print("No matches found.")
-            return
+    print("Initializing MCP session...", flush=True)
+    firestore_client = get_firestore_client()
+    try:
+        async with get_mcp_session(config) as session:
+            print("MCP session initialized!", flush=True)
+            print("Fetching regulations...", flush=True)
+            regs = await fetch_regulations(session)
+            doc_map = await fetch_documents(session)
+            matches = match_regulations(regs, doc_map)
+            if not matches:
+                print("No matches found.")
+                return
 
-        batch_paths = save_batches(matches)
-        progress = await process_batches(session, batch_paths, len(matches))
+            batch_paths = save_batches(matches)
+            progress = await process_batches(session, batch_paths, len(matches), firestore_client)
+    finally:
+        firestore_client.close()
 
     rate = (progress["completed_entries"] / progress["total_entries"] * 100) if progress["total_entries"] else 0
     print(f"\n{'='*60}\nCOMPLETE\n{'='*60}")
