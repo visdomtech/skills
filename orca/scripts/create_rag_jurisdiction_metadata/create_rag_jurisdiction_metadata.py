@@ -210,11 +210,37 @@ async def check_metadata(session, rag, firestore_client=None):
         print(f"    Warning: Failed to check metadata: {e}")
         return None
 
+async def check_cache(rag, firestore_client):
+    """Check Firestore cache for jurisdiction_code without MCP fallback.
+    
+    Returns (found: bool, value: str|None).
+    """
+    if not firestore_client:
+        return False, None
+    filename = rag.split('/')[-1] if '/' in rag else rag
+    try:
+        cached = await get_rag_metadata(firestore_client, filename)
+        if cached:
+            metadata = cached.get("metadata", [])
+            for entry in metadata:
+                if entry.get("key") == "jurisdiction_code":
+                    return True, entry.get("value")
+    except Exception as e:
+        print(f"    Warning: Firestore cache read failed for {filename}: {e}")
+    return False, None
+
+
 async def upsert_metadata(session, rag, entries, expected, firestore_client=None):
     """Create or update metadata after checking existing state.
     
     Returns (success: bool, message: str).
     """
+    # Fast path: check cache first to skip unnecessary MCP calls
+    if firestore_client:
+        found, cached_value = await check_cache(rag, firestore_client)
+        if found and cached_value == expected:
+            return True, "Skipped (cache confirmed)"
+
     current = await check_metadata(session, rag, firestore_client)
     if current == expected:
         return True, "Skipped"
