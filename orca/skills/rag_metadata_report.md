@@ -14,9 +14,19 @@ This skill describes how to generate a comprehensive report on the jurisdiction 
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`).
 - **Optional**: Google Cloud credentials configured for Firestore access (for caching).
 - Workspace ID: 1, Repository ID: 6.
-- Documents data cached at `assets/compliance_documents.json`.
 
-## Step 1: Prepare Environment
+## Step 1: Prepare Documents Data
+
+Before running the report, ensure the documents cache is up-to-date:
+
+```bash
+cd orca
+uv run fetch-compliance-documents --config assets/mcp_config.json
+```
+
+This generates `assets/compliance_documents.json`, which is required by the report script.
+
+## Step 2: Prepare Environment
 
 Before running the script, ensure your virtual environment is set up and dependencies are installed:
 

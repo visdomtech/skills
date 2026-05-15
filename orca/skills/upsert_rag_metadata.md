@@ -9,6 +9,7 @@ Reliably set or update a single metadata entry for a given RAG file using the Or
 - Access to the Orca MCP server
 - The full resource name of the RAG file (e.g., `projects/.../ragFiles/...`)
 - The metadata `key` and the desired `value` (string, integer, float, or boolean)
+- **Firestore Access**: Google Cloud credentials configured for the `regulations` database in project `visdomapp-1` to update the `rag_metadata_cache` collection.
 
 ## Workflow
 
@@ -79,6 +80,54 @@ Call `mcp__orca__list_rag_metadata` again with the same `ragFileName`.
 2. Confirm that the `value` matches the expected value you intended to set.
 3. If the value matches, the upsert is complete.
 4. If the value does not match or the entry is missing, report the failure and suggest retrying.
+
+### Step 4: Sync Firestore Cache
+
+After successfully verifying the metadata change in Vertex AI, synchronize the `rag_metadata_cache` collection in Firestore to ensure consistency with future reports.
+
+1. **Identify the Document**: The cache document ID is the `filename` associated with the RAG file.
+2. **Fetch Current Cache State**: Call `get_rag_metadata` from `scripts/rag_metadata_report/firestore_utils.py` using the filename.
+3. **Update Metadata**: 
+   - If the metadata entry exists in the cached list, update its value.
+   - If it doesn't exist, append a new entry `{"key": "your_key", "value": "your_value"}` to the `metadata` array.
+4. **Save to Firestore**: Call `save_rag_metadata` with the updated metadata list.
+
+**Python Example for Cache Sync:**
+```python
+from scripts.rag_metadata_report.firestore_utils import get_firestore_client, get_rag_metadata, save_rag_metadata
+import asyncio
+
+async def sync_cache(filename, rag_file_name, key, new_value):
+    client = get_firestore_client()
+    try:
+        # Get existing cache
+        cached = await get_rag_metadata(client, filename)
+        metadata = cached["metadata"] if cached else []
+        
+        # Update or add the key
+        updated = False
+        for entry in metadata:
+            if entry.get("key") == key:
+                entry["value"] = new_value
+                updated = True
+                break
+        
+        if not updated:
+            metadata.append({"key": key, "value": new_value})
+            
+        # Save back to Firestore
+        await save_rag_metadata(
+            client=client,
+            rag_file_name=rag_file_name,
+            filename=filename,
+            metadata=metadata
+        )
+    finally:
+        client.close()
+
+# Usage
+# asyncio.run(sync_cache("my_doc.pdf", "projects/...", "jurisdiction_code", "US-CA"))
+```
 
 ## Important Notes
 

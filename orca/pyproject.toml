@@ -12,13 +12,14 @@ dependencies = [
 [project.scripts]
 rag-metadata-report = "scripts.rag_metadata_report.generate_rag_metadata_report:cli"
 fetch-document-rag-data = "scripts.document_rag_file_report.fetch_document_rag_data:main"
-fetch-compliance-documents = "scripts.rag_metadata_report.fetch_compliance_documents:main"
+fetch-compliance-documents = "scripts.common.fetch_compliance_documents:main"
 send-email = "scripts.send_email.send_email:main"
 fetch-jurisdictions = "scripts.jurisdictions_report.fetch_jurisdictions:main"
 fetch-law-changes = "scripts.law_changes_report.fetch_law_changes:main"
 create-rag-jurisdiction-metadata = "scripts.create_rag_jurisdiction_metadata.create_rag_jurisdiction_metadata:main"
 batch-update-rag-file-name = "scripts.document_rag_file_report.batch_update_rag_file_name:main"
 build-jurisdiction-codes-cache = "scripts.rag_metadata_report.build_jurisdiction_codes_cache:main"
+sync-rag-metadata-cache = "scripts.rag_metadata_report.sync_rag_metadata_cache:cli"
 
 [tool.uv]
 default-groups = "all"
