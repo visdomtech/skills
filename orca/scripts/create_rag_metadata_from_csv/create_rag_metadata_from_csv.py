@@ -21,13 +21,9 @@ import argparse
 import asyncio
 import csv
 import json
-import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from scripts.common.rag_metadata import _parse_content, get_mcp_session, upsert_rag_metadata
 
 DOCUMENTS_FILE = Path("assets/compliance_documents.json")
 CONCURRENCY_LIMIT = 3
@@ -63,38 +59,6 @@ def load_csv(csv_path):
         return [{"filename": r["filename"].strip(), "key": r["key"].strip(), "value": r["value"].strip()} for r in reader]
 
 
-@asynccontextmanager
-async def get_mcp_session(config):
-    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=60.0)
-    async with client:
-        async with streamable_http_client(url=config["url"], http_client=client) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                yield session
-
-
-def _parse_content(result):
-    if not result.content:
-        return {}
-    if isinstance(result.content, list):
-        for item in result.content:
-            if hasattr(item, "text"):
-                try:
-                    return json.loads(item.text)
-                except json.JSONDecodeError:
-                    continue
-            elif isinstance(item, dict):
-                return item
-    if isinstance(result.content, dict):
-        return result.content
-    if hasattr(result.content, "text"):
-        try:
-            return json.loads(result.content.text)
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
 async def fetch_valid_keys(session):
     """Call list_rag_data_schemas and return the set of valid key names.
 
@@ -104,7 +68,6 @@ async def fetch_valid_keys(session):
     try:
         result = await session.call_tool("list_rag_data_schemas", {})
         content = _parse_content(result)
-        # Try common response shapes: list at top-level, or under "schemas"/"data"
         schemas = None
         if isinstance(content, list):
             schemas = content
@@ -113,7 +76,6 @@ async def fetch_valid_keys(session):
         if schemas and isinstance(schemas, list):
             keys = set()
             for s in schemas:
-                # Accept either {"key": "..."} or {"name": "..."}
                 k = s.get("key") or s.get("name")
                 if k:
                     keys.add(k)
@@ -122,46 +84,6 @@ async def fetch_valid_keys(session):
     except Exception as e:
         print(f"Warning: could not call list_rag_data_schemas: {e}", flush=True)
         return None
-
-
-async def get_current_value(session, rag_file_name, key):
-    """Return the current value for key on the RAG file, or None if absent."""
-    result = await session.call_tool("list_rag_metadata", {"ragFileName": rag_file_name})
-    content = _parse_content(result)
-    for entry in content.get("metadata") or []:
-        if entry.get("key") == key:
-            return entry.get("value")
-    return None
-
-
-async def check_and_upsert(session, semaphore, rag_file_name, key, value):
-    """Upsert one metadata key-value pair. Returns (status, detail)."""
-    async with semaphore:
-        try:
-            current = await get_current_value(session, rag_file_name, key)
-
-            if current == value:
-                return "skipped", None
-
-            tool = "create_rag_metadata" if current is None else "update_rag_metadata"
-            entries = [{"key": key, "valueStr": value}]
-            result = await session.call_tool(tool, {"ragFileName": rag_file_name, "entries": entries})
-
-            if result.isError:
-                err_text = str(result.content)
-                if "INTERNAL" in err_text:
-                    # Re-verify — MCP often returns INTERNAL on success
-                    verified = await get_current_value(session, rag_file_name, key)
-                    if verified == value:
-                        action = "created" if current is None else "updated"
-                        return action, "false-negative INTERNAL"
-                return "failed", err_text
-
-            action = "created" if current is None else "updated"
-            return action, None
-
-        except Exception as e:
-            return "failed", str(e)
 
 
 async def async_main():
@@ -181,7 +103,7 @@ async def async_main():
     doc_map = load_documents()
     rows = load_csv(args.csv_path)
 
-    # --- Validate CSV ---
+    # Validate filenames before opening MCP session
     errors = []
     for i, row in enumerate(rows, start=2):  # row 1 is header
         if row["filename"] not in doc_map:
@@ -193,7 +115,7 @@ async def async_main():
         raise SystemExit(1)
 
     async with get_mcp_session(config) as session:
-        # --- Schema validation ---
+        # Schema key validation
         if not args.skip_schema_validation:
             print("Fetching available RAG data schemas...", flush=True)
             valid_keys = await fetch_valid_keys(session)
@@ -218,7 +140,8 @@ async def async_main():
 
         async def process_row(i, row):
             rag = doc_map[row["filename"]]
-            status, detail = await check_and_upsert(session, semaphore, rag, row["key"], row["value"])
+            async with semaphore:
+                status, detail = await upsert_rag_metadata(session, rag, row["key"], row["value"])
             counts[status] += 1
             if status == "failed":
                 failures.append({"filename": row["filename"], "key": row["key"], "detail": detail})

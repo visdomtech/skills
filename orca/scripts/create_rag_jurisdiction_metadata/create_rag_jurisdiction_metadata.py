@@ -12,15 +12,11 @@ Usage:
 import argparse
 import asyncio
 import json
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
-
-from scripts.rag_metadata_report.firestore_utils import get_firestore_client, get_rag_metadata, save_rag_metadata
+from scripts.common.rag_metadata import _parse_content, get_mcp_session, upsert_rag_metadata
+from scripts.rag_metadata_report.firestore_utils import get_firestore_client
 
 
 # Configuration
@@ -29,6 +25,7 @@ REPOSITORY_ID = 6
 PROGRESS_FILE = Path("assets/rag_meta_batch_progress.json")
 BATCH_SIZE = 100
 BATCH_DIR = Path("assets")
+
 
 def load_progress():
     """Load progress state or return defaults."""
@@ -40,6 +37,7 @@ def load_progress():
         print("Warning: Progress file corrupted, starting fresh")
         return _default_progress()
 
+
 def _default_progress():
     return {
         "current_batch": None,
@@ -49,6 +47,7 @@ def _default_progress():
         "last_updated": None,
     }
 
+
 def save_progress(state):
     """Save progress atomically with UTC timestamp."""
     PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -57,51 +56,11 @@ def save_progress(state):
     temp.write_text(json.dumps(state, indent=2))
     temp.rename(PROGRESS_FILE)
 
-@asynccontextmanager
-async def get_mcp_session(config):
-    """Yield an initialized MCP session via HTTP/SSE."""
-    if config.get("type") != "http":
-        raise ValueError(f"Unsupported transport: {config['type']}")
-    # Set a longer timeout (60s) to handle slow MCP tool responses
-    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=60.0)
-    async with client:
-        async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
 
 def load_entries(path):
     """Return the 'files' list from a batch JSON file."""
     return json.loads(path.read_text()).get("files", [])
 
-def _parse_content(result):
-    """Parse MCP tool result content into a dictionary."""
-    if not result.content:
-        return {}
-    
-    # Handle list of content items (common in MCP SDK)
-    if isinstance(result.content, list):
-        for item in result.content:
-            if hasattr(item, 'text'):
-                try:
-                    return json.loads(item.text)
-                except json.JSONDecodeError:
-                    continue
-            elif isinstance(item, dict):
-                return item
-    
-    # Handle direct dictionary
-    if isinstance(result.content, dict):
-        return result.content
-    
-    # Handle TextContent object
-    if hasattr(result.content, 'text'):
-        try:
-            return json.loads(result.content.text)
-        except json.JSONDecodeError:
-            return {}
-            
-    return {}
 
 async def fetch_regulations(session):
     """Return included regulations for the workspace."""
@@ -118,6 +77,7 @@ async def fetch_regulations(session):
         print(f"Error fetching regulations: {e}", flush=True)
         raise
 
+
 async def fetch_documents(session):
     """Return a map of filename → rag_file_name."""
     print("Fetching documents...")
@@ -132,6 +92,7 @@ async def fetch_documents(session):
             doc_map[fname] = rag
     print(f"Built document map with {len(doc_map)} entries")
     return doc_map
+
 
 def match_regulations(regs, doc_map):
     """Build metadata entries by matching regulations to documents."""
@@ -150,6 +111,7 @@ def match_regulations(regs, doc_map):
     print(f"Total matches: {len(matches)}, Missing documents: {missing}")
     return matches
 
+
 def save_batches(matches):
     """Write matches to batch JSON files and return their paths."""
     BATCH_DIR.mkdir(parents=True, exist_ok=True)
@@ -158,113 +120,13 @@ def save_batches(matches):
     paths = []
     for i in range(0, len(matches), BATCH_SIZE):
         num = i // BATCH_SIZE + 1
-        chunk = matches[i : i + BATCH_SIZE]
+        chunk = matches[i: i + BATCH_SIZE]
         path = BATCH_DIR / f"rag_meta_batch_{num}.json"
         path.write_text(json.dumps({"files": chunk}, indent=2))
         paths.append(path)
         print(f"  Created {path.name} with {len(chunk)} entries")
     return paths
 
-async def check_metadata(session, rag, firestore_client=None):
-    """Return existing jurisdiction_code value or None."""
-    filename = rag.split('/')[-1] if '/' in rag else rag
-
-    # Try to get from Firestore cache first
-    if firestore_client:
-        try:
-            cached = await get_rag_metadata(firestore_client, filename)
-            if cached:
-                # Extract jurisdiction_code from cached metadata
-                metadata = cached.get("metadata", [])
-                for entry in metadata:
-                    if entry.get("key") == "jurisdiction_code":
-                        return entry.get("value")
-        except Exception as e:
-            print(f"    Warning: Firestore cache read failed for {filename}: {e}")
-
-    # Fetch from MCP
-    try:
-        result = await session.call_tool("list_rag_metadata", {"ragFileName": rag})
-        content = _parse_content(result)
-        entries = content.get("metadata") or []
-        value = None
-        for entry in entries:
-            if entry.get("key") == "jurisdiction_code":
-                value = entry.get("value")
-                break
-
-        # Cache the result if client is available
-        if firestore_client:
-            try:
-                await save_rag_metadata(
-                    client=firestore_client,
-                    rag_file_name=rag,
-                    filename=filename,
-                    metadata=entries,
-                )
-            except Exception as e:
-                print(f"    Warning: Firestore cache write failed for {filename}: {e}")
-
-        return value
-    except Exception as e:
-        print(f"    Warning: Failed to check metadata: {e}")
-        return None
-
-async def check_cache(rag, firestore_client):
-    """Check Firestore cache for jurisdiction_code without MCP fallback.
-    
-    Returns (found: bool, value: str|None).
-    """
-    if not firestore_client:
-        return False, None
-    filename = rag.split('/')[-1] if '/' in rag else rag
-    try:
-        cached = await get_rag_metadata(firestore_client, filename)
-        if cached:
-            metadata = cached.get("metadata", [])
-            for entry in metadata:
-                if entry.get("key") == "jurisdiction_code":
-                    return True, entry.get("value")
-    except Exception as e:
-        print(f"    Warning: Firestore cache read failed for {filename}: {e}")
-    return False, None
-
-
-async def upsert_metadata(session, rag, entries, expected, firestore_client=None):
-    """Create or update metadata after checking existing state.
-    
-    Returns (success: bool, message: str).
-    """
-    # Fast path: check cache first to skip unnecessary MCP calls
-    if firestore_client:
-        found, cached_value = await check_cache(rag, firestore_client)
-        if found and cached_value == expected:
-            return True, "Skipped (cache confirmed)"
-
-    current = await check_metadata(session, rag, firestore_client)
-    if current == expected:
-        return True, "Skipped"
-
-    try:
-        tool = "create_rag_metadata" if current is None else "update_rag_metadata"
-        result = await session.call_tool(tool, {"ragFileName": rag, "entries": entries})
-
-        # Handle false-negative INTERNAL errors
-        if result.isError and "INTERNAL" in str(result.content):
-            verified = await check_metadata(session, rag, firestore_client)
-            if verified == expected:
-                return True, "Created & Verified (false negative)"
-            return False, "Failed verification after INTERNAL error"
-
-        # Normal verification for updates
-        if current is not None:
-            verified = await check_metadata(session, rag, firestore_client)
-            if verified != expected:
-                return False, f"Verification mismatch: expected {expected}, got {verified}"
-
-        return True, "Created" if current is None else "Updated"
-    except Exception as e:
-        return False, f"Exception: {e}"
 
 async def process_batches(session, batch_paths, total, firestore_client=None):
     """Process batch files with checkpoint resumption."""
@@ -289,11 +151,14 @@ async def process_batches(session, batch_paths, total, firestore_client=None):
 
         for i in range(idx, len(entries)):
             entry = entries[i]
-            ok, msg = await upsert_metadata(session, entry["ragFileName"], entry["entries"], entry["entries"][0]["valueStr"], firestore_client)
-            if ok:
+            rag = entry["ragFileName"]
+            key = entry["entries"][0]["key"]
+            value = entry["entries"][0]["valueStr"]
+            status, detail = await upsert_rag_metadata(session, rag, key, value, firestore_client)
+            if status != "failed":
                 progress["completed_entries"] += 1
             else:
-                print(f"    Failed: {entry['ragFileName']} - {msg}")
+                print(f"    Failed: {rag} - {detail}")
 
             if (i - idx + 1) % 10 == 0:
                 progress.update({"current_batch": name, "current_batch_index": i + 1})
@@ -332,7 +197,6 @@ async def async_main():
     try:
         async with get_mcp_session(config) as session:
             print("MCP session initialized!", flush=True)
-            print("Fetching regulations...", flush=True)
             regs = await fetch_regulations(session)
             doc_map = await fetch_documents(session)
             matches = match_regulations(regs, doc_map)
@@ -348,6 +212,7 @@ async def async_main():
     rate = (progress["completed_entries"] / progress["total_entries"] * 100) if progress["total_entries"] else 0
     print(f"\n{'='*60}\nCOMPLETE\n{'='*60}")
     print(f"Processed: {progress['completed_entries']}/{progress['total_entries']} ({rate:.1f}%)")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
