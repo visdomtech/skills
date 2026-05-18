@@ -20,6 +20,7 @@ create-rag-jurisdiction-metadata = "scripts.create_rag_jurisdiction_metadata.cre
 batch-update-rag-file-name = "scripts.document_rag_file_report.batch_update_rag_file_name:main"
 build-jurisdiction-codes-cache = "scripts.rag_metadata_report.build_jurisdiction_codes_cache:main"
 sync-rag-metadata-cache = "scripts.rag_metadata_report.sync_rag_metadata_cache:cli"
+create-rag-metadata-from-csv = "scripts.create_rag_metadata_from_csv.create_rag_metadata_from_csv:main"
 
 [tool.uv]
 default-groups = "all"
