@@ -107,6 +107,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
         result = {
             "filename": filename,
             "rag_file_name": "",
+            "uploaded": doc.get("uploaded_at", ""),
             "metadata": [],
             "error": "No rag_file_name"
         }
@@ -123,6 +124,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                     return {
                         "filename": cached["filename"],
                         "rag_file_name": cached["rag_file_name"],
+                        "uploaded": doc.get("uploaded_at", ""),
                         "metadata": cached["metadata"],
                         "error": cached.get("error"),
                     }
@@ -139,6 +141,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                 result = {
                     "filename": filename,
                     "rag_file_name": rag_name,
+                    "uploaded": doc.get("uploaded_at", ""),
                     "metadata": metadata,
                     "error": None
                 }
@@ -155,6 +158,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                 result = {
                     "filename": filename,
                     "rag_file_name": rag_name,
+                    "uploaded": doc.get("uploaded_at", ""),
                     "metadata": [],
                     "error": str(e)
                 }
@@ -192,10 +196,12 @@ def generate_csv(results):
     """Write detailed metadata to CSV."""
     rows = []
     for res in results:
+        uploaded = res.get("uploaded", "")
         if res["error"] and res["error"] != "No rag_file_name":
             rows.append({
                 "filename": res["filename"],
                 "rag_file_name": res["rag_file_name"],
+                "uploaded": uploaded,
                 "metadata_key": "ERROR",
                 "metadata_value": res["error"]
             })
@@ -203,6 +209,7 @@ def generate_csv(results):
             rows.append({
                 "filename": res["filename"],
                 "rag_file_name": res["rag_file_name"],
+                "uploaded": uploaded,
                 "metadata_key": "",
                 "metadata_value": ""
             })
@@ -211,12 +218,13 @@ def generate_csv(results):
                 rows.append({
                     "filename": res["filename"],
                     "rag_file_name": res["rag_file_name"],
+                    "uploaded": uploaded,
                     "metadata_key": entry.get("key", ""),
                     "metadata_value": entry.get("value", "")
                 })
-    
+
     with open(CSV_OUTPUT, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["filename", "rag_file_name", "metadata_key", "metadata_value"])
+        writer = csv.DictWriter(f, fieldnames=["filename", "rag_file_name", "uploaded", "metadata_key", "metadata_value"])
         writer.writeheader()
         writer.writerows(rows)
     
@@ -413,6 +421,7 @@ async def main():
                     results.append({
                         "filename": documents[i].get("filename", "Unknown"),
                         "rag_file_name": documents[i].get("rag_file_name", ""),
+                        "uploaded": documents[i].get("uploaded_at", ""),
                         "metadata": [],
                         "error": str(res)
                     })

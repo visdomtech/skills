@@ -65,6 +65,7 @@ Contains one row per metadata entry. If a document has multiple metadata keys, i
 | :--- | :--- |
 | `filename` | The name of the compliance document. |
 | `rag_file_name` | The full resource name of the associated RAG file. |
+| `uploaded` | The UTC timestamp when the document was uploaded (`uploaded_at` from the document record). |
 | `metadata_key` | The key of the metadata entry (e.g., `jurisdiction_code`). |
 | `metadata_value` | The value of the metadata entry. |
 
