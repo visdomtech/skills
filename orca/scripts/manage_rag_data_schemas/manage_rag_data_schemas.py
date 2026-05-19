@@ -102,10 +102,15 @@ async def do_delete(session, corpus_name, key):
         print(f"\nError: key '{key}' not found in schema. No changes made.")
         raise SystemExit(1)
 
+    schema_name = next((s.get("name") for s in schemas if s.get("key") == key), None)
+    if not schema_name:
+        print(f"\nError: could not find resource name for key '{key}'. No changes made.")
+        raise SystemExit(1)
+
     print(f"\nDeleting schema key '{key}'...", flush=True)
     write_result = await session.call_tool(
         "delete_rag_data_schema",
-        {"corpusName": corpus_name, "key": key},
+        {"name": schema_name},
     )
     if write_result.isError:
         print(f"Error: delete_rag_data_schema failed: {write_result.content}")
