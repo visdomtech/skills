@@ -86,7 +86,7 @@ async def do_add(session, corpus_name, key, data_type):
         raise SystemExit(1)
 
     print("Done. Verifying...", flush=True)
-    await do_list(session)
+    await do_list(session, corpus_name)
 
 
 async def do_delete(session, corpus_name, key):
@@ -117,7 +117,7 @@ async def do_delete(session, corpus_name, key):
         raise SystemExit(1)
 
     print("Done. Verifying...", flush=True)
-    await do_list(session)
+    await do_list(session, corpus_name)
 
 
 async def async_main():
