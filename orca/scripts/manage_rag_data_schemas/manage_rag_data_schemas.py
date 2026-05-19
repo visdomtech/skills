@@ -2,9 +2,9 @@
 """Manage RAG data schemas: list, add, or delete schema keys.
 
 Usage:
-    manage-rag-data-schemas --config <path> --action list
-    manage-rag-data-schemas --config <path> --action add --key <key> [--data-type STRING]
-    manage-rag-data-schemas --config <path> --action delete --key <key> --confirm
+    manage-rag-data-schemas --config <path> --corpus-name <name> --action list
+    manage-rag-data-schemas --config <path> --corpus-name <name> --action add --key <key> [--data-type STRING]
+    manage-rag-data-schemas --config <path> --corpus-name <name> --action delete --key <key> --confirm
 
 Actions:
     list    Print all current schema keys and their data types.
@@ -59,26 +59,21 @@ def _print_schema_table(schemas, corpus_name=None):
         print(f"  {i:>3}. {key:<{max_key}}  {dtype}")
 
 
-async def do_list(session):
-    result = await session.call_tool("list_rag_data_schemas", {})
+async def do_list(session, corpus_name):
+    result = await session.call_tool("list_rag_data_schemas", {"corpusName": corpus_name})
     content = _parse_content(result)
     schemas = _parse_schemas(content)
-    corpus_name = _extract_corpus_name(content)
     _print_schema_table(schemas, corpus_name)
-    return schemas, corpus_name
+    return schemas
 
 
-async def do_add(session, key, data_type):
+async def do_add(session, corpus_name, key, data_type):
     print(f"Fetching current schemas...", flush=True)
-    schemas, corpus_name = await do_list(session)
+    schemas = await do_list(session, corpus_name)
 
     existing_keys = {s.get("key") for s in schemas}
     if key in existing_keys:
         print(f"\nError: key '{key}' already exists in the schema. No changes made.")
-        raise SystemExit(1)
-
-    if not corpus_name:
-        print("\nError: could not determine corpusName from list_rag_data_schemas response.")
         raise SystemExit(1)
 
     print(f"\nAdding schema key '{key}' (dataType={data_type})...", flush=True)
@@ -94,21 +89,17 @@ async def do_add(session, key, data_type):
     await do_list(session)
 
 
-async def do_delete(session, key):
+async def do_delete(session, corpus_name, key):
     if key in PROTECTED_KEYS:
         print(f"Error: '{key}' is a protected key and cannot be deleted.")
         raise SystemExit(1)
 
     print(f"Fetching current schemas...", flush=True)
-    schemas, corpus_name = await do_list(session)
+    schemas = await do_list(session, corpus_name)
 
     existing_keys = {s.get("key") for s in schemas}
     if key not in existing_keys:
         print(f"\nError: key '{key}' not found in schema. No changes made.")
-        raise SystemExit(1)
-
-    if not corpus_name:
-        print("\nError: could not determine corpusName from list_rag_data_schemas response.")
         raise SystemExit(1)
 
     print(f"\nDeleting schema key '{key}'...", flush=True)
@@ -127,6 +118,8 @@ async def do_delete(session, key):
 async def async_main():
     parser = argparse.ArgumentParser(description="Manage RAG data schemas")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
+    parser.add_argument("--corpus-name", required=True, dest="corpus_name",
+                        help="Full corpus resource name (e.g. projects/.../ragCorpora/...)")
     parser.add_argument("--action", required=True, choices=["list", "add", "delete"],
                         help="Action to perform")
     parser.add_argument("--key", help="Schema key name (required for add and delete)")
@@ -158,11 +151,11 @@ async def async_main():
 
     async with get_mcp_session(config) as session:
         if args.action == "list":
-            await do_list(session)
+            await do_list(session, args.corpus_name)
         elif args.action == "add":
-            await do_add(session, args.key, data_type)
+            await do_add(session, args.corpus_name, args.key, data_type)
         elif args.action == "delete":
-            await do_delete(session, args.key)
+            await do_delete(session, args.corpus_name, args.key)
 
 
 def main():

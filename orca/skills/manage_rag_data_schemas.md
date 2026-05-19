@@ -13,6 +13,7 @@ Interactively list, add, or delete RAG data schema keys for a Vertex AI RAG corp
 - Orca MCP server access
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - MCP config JSON (see `create_rag_jurisdiction_metadata.md` Step 1 for setup)
+- `corpusName` — the full resource name of the RAG corpus (e.g. `projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088`). See `AGENTS.md` "Well-Known Data" for corpus names.
 
 ## Workflow
 
@@ -20,10 +21,12 @@ Interactively list, add, or delete RAG data schema keys for a Vertex AI RAG corp
 
 ```bash
 cd orca
-uv run manage-rag-data-schemas --config assets/mcp_config.json --action list
+uv run manage-rag-data-schemas --config assets/mcp_config.json \
+    --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
+    --action list
 ```
 
-The script prints a numbered table of all current schema keys and their data types, plus the `CorpusName`. Display this to the user.
+The script prints a numbered table of all current schema keys and their data types for the given corpus. Display this to the user.
 
 Then ask the user: **"Would you like to (A) add a new schema key, (B) delete an existing schema key, or (C) exit?"**
 
@@ -39,6 +42,7 @@ Then run:
 
 ```bash
 uv run manage-rag-data-schemas --config assets/mcp_config.json \
+    --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action add \
     --key <user-provided-key> \
     --data-type <selected-type>
@@ -46,7 +50,6 @@ uv run manage-rag-data-schemas --config assets/mcp_config.json \
 
 The script automatically:
 - Checks the key doesn't already exist (aborts if it does)
-- Infers `CorpusName` from the live schema list
 - Calls `create_rag_data_schema`
 - Reprints the updated schema table to confirm the addition
 
@@ -64,6 +67,7 @@ For all other keys, use a two-step confirmation:
 
 ```bash
 uv run manage-rag-data-schemas --config assets/mcp_config.json \
+    --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action delete \
     --key <selected-key>
 ```
@@ -76,6 +80,7 @@ Ask the user: **"Are you sure you want to permanently delete `<key>`? This canno
 
 ```bash
 uv run manage-rag-data-schemas --config assets/mcp_config.json \
+    --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action delete \
     --key <selected-key> \
     --confirm
@@ -91,5 +96,5 @@ If the user's reply is anything other than "DELETE", abort — do not run the se
 
 - `jurisdiction_code` is a protected key — the agent must refuse to delete it before running any script command.
 - `DataType` defaults to `STRING` if the user does not specify.
-- `CorpusName` is always inferred from the live `list_rag_data_schemas` response by the script — never prompt the user for it.
+- `CorpusName` must be provided via `--corpus-name`. Use the value from `AGENTS.md` "Well-Known Data".
 - The `Granularity` parameter is intentionally omitted from all `create_rag_data_schema` calls.
