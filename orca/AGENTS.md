@@ -24,6 +24,7 @@ Before calling any MCP tool directly, **always check `orca/skills/` for an exist
 | Generate document-to-RAG-file matching report | `orca/skills/document_rag_file_report.md` |
 | Create RAG jurisdiction metadata for included regulations | `orca/skills/create_rag_jurisdiction_metadata.md` |
 | Batch process MCP tools via Python script (saves tokens) | `orca/skills/mcp_script_runner.md` |
+| Manage RAG data schemas (list, add, delete) | `orca/skills/manage_rag_data_schemas.md` |
 
 If a skill file exists for the task, read and follow it instead of improvising with raw MCP calls.
 
@@ -42,6 +43,12 @@ The `orca/scripts/` directory contains helper scripts that automate data process
 
 - **Direct MCP Tool Invocation**: Scripts run in a standard Python environment and do **not** have direct access to the MCP server. They cannot call `create_rag_metadata`, `set_rag_file_name`, or any other MCP tool directly.
 - **Real-time Data Mutation**: Any action that modifies data in the Orca system (creating metadata, updating statuses, sending emails) must be performed by the agent using the appropriate MCP tool call, guided by the skill instructions.
+
+### Scripts vs. Direct Agent MCP Calls
+
+**All Orca skills must use Python scripts via the MCP client SDK — the agent must NOT call Orca MCP tools directly through its native tool-call capability.**
+
+This applies to every operation, including simple one-shot reads: always run the appropriate script rather than invoking `mcp__orca__*` tools inline. This ensures consistent error handling (e.g. INTERNAL error re-verification), clear audit trails in script output, and alignment with the established workflow pattern across all skills.
 
 ### Typical Workflow
 

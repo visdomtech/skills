@@ -398,7 +398,11 @@ async def main():
     documents = load_documents()
     print(f"Loaded {len(documents)} documents", flush=True)
 
-    firestore_client = get_firestore_client()
+    try:
+        firestore_client = get_firestore_client()
+    except Exception as e:
+        print(f"Firestore unavailable, falling back to direct MCP calls (no caching): {e}", flush=True)
+        firestore_client = None
     if args.force_refresh:
         print("Force refresh mode: ignoring cache", flush=True)
 
