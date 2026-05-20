@@ -57,7 +57,7 @@ def _parse_content(result):
 async def get_mcp_session(config):
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config['type']}")
-    client = httpx.AsyncClient(headers=config.get("headers", {}))
+    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=httpx.Timeout(120.0, connect=30.0))
     async with client:
         async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
             async with ClientSession(read_stream, write_stream) as session:
