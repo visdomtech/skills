@@ -28,7 +28,7 @@ RAG_FILES_FILE = ASSETS_DIR / "rag_files.json"
 DOCUMENTS_FILE = ASSETS_DIR / "documents.json"
 DEFAULT_OUTPUT = ASSETS_DIR / "document_rag_file_report.html"
 DEFAULT_CORPUS_DISPLAY_NAME = "prod-s30-w1-r6-happy-quartz"
-GENERATE_SCRIPT = Path("scripts/document_rag_file_report/generate_document_rag_file_report.py")
+GENERATE_SCRIPT = Path("scripts/rag_document_linking/generate_document_rag_file_report.py")
 
 
 def _parse_content(result):

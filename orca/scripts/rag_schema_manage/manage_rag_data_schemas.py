@@ -2,9 +2,9 @@
 """Manage RAG data schemas: list, add, or delete schema keys.
 
 Usage:
-    manage-rag-data-schemas --config <path> --corpus-name <name> --action list
-    manage-rag-data-schemas --config <path> --corpus-name <name> --action add --key <key> [--data-type STRING]
-    manage-rag-data-schemas --config <path> --corpus-name <name> --action delete --key <key> --confirm
+    rag-schema-manage --config <path> --corpus-name <name> --action list
+    rag-schema-manage --config <path> --corpus-name <name> --action add --key <key> [--data-type STRING]
+    rag-schema-manage --config <path> --corpus-name <name> --action delete --key <key> --confirm
 
 Actions:
     list    Print all current schema keys and their data types.

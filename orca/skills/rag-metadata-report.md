@@ -120,7 +120,7 @@ Run this after `rag-metadata-report` has populated (or updated) the `rag_metadat
 
 ```bash
 cd orca
-uv run build-jurisdiction-codes-cache
+uv run rag-metadata-build-jurisdiction-cache
 ```
 
 The script streams all documents from `rag_metadata_cache`, collects every distinct `jurisdiction_code` value, and writes the sorted list to `rag_metadata_summary/jurisdiction_codes`.

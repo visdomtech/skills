@@ -86,7 +86,7 @@ Call `mcp__orca__list_rag_metadata` again with the same `ragFileName`.
 After successfully verifying the metadata change in Vertex AI, synchronize the `rag_metadata_cache` collection in Firestore to ensure consistency with future reports.
 
 1. **Identify the Document**: The cache document ID is the `filename` associated with the RAG file.
-2. **Fetch Current Cache State**: Call `get_rag_metadata` from `scripts/rag_metadata_report/firestore_utils.py` using the filename.
+2. **Fetch Current Cache State**: Call `get_rag_metadata` from `scripts/common/firestore_utils.py` using the filename.
 3. **Update Metadata**: 
    - If the metadata entry exists in the cached list, update its value.
    - If it doesn't exist, append a new entry `{"key": "your_key", "value": "your_value"}` to the `metadata` array.
@@ -94,7 +94,7 @@ After successfully verifying the metadata change in Vertex AI, synchronize the `
 
 **Python Example for Cache Sync:**
 ```python
-from scripts.rag_metadata_report.firestore_utils import get_firestore_client, get_rag_metadata, save_rag_metadata
+from scripts.common.firestore_utils import get_firestore_client, get_rag_metadata, save_rag_metadata
 import asyncio
 
 async def sync_cache(filename, rag_file_name, key, new_value):

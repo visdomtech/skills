@@ -2,17 +2,17 @@
 
 ## Overview
 
-Interactively list, add, or delete RAG data schema keys for a Vertex AI RAG corpus. All MCP calls are made via the `manage-rag-data-schemas` Python script using the MCP client SDK — the agent does **not** call MCP tools directly.
+Interactively list, add, or delete RAG data schema keys for a Vertex AI RAG corpus. All MCP calls are made via the `rag-schema-manage` Python script using the MCP client SDK — the agent does **not** call MCP tools directly.
 
-- Script: `orca/scripts/manage_rag_data_schemas/manage_rag_data_schemas.py`
-- Entry point: `manage-rag-data-schemas`
+- Script: `orca/scripts/rag_schema_manage/manage_rag_data_schemas.py`
+- Entry point: `rag-schema-manage`
 - MCP tools used (by the script): `list_rag_data_schemas`, `create_rag_data_schema`, `delete_rag_data_schema`
 
 ## Prerequisites
 
 - Orca MCP server access
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
-- MCP config JSON (see `create_rag_jurisdiction_metadata.md` Step 1 for setup)
+- MCP config JSON (see `rag-metadata-create-jurisdiction.md` Step 1 for setup)
 - `corpusName` — the full resource name of the RAG corpus (e.g. `projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088`). See `AGENTS.md` "Well-Known Data" for corpus names.
 
 ## Workflow
@@ -21,7 +21,7 @@ Interactively list, add, or delete RAG data schema keys for a Vertex AI RAG corp
 
 ```bash
 cd orca
-uv run manage-rag-data-schemas --config assets/mcp_config.json \
+uv run rag-schema-manage --config assets/mcp_config.json \
     --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action list
 ```
@@ -41,7 +41,7 @@ Ask the user:
 Then run:
 
 ```bash
-uv run manage-rag-data-schemas --config assets/mcp_config.json \
+uv run rag-schema-manage --config assets/mcp_config.json \
     --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action add \
     --key <user-provided-key> \
@@ -66,7 +66,7 @@ For all other keys, use a two-step confirmation:
 **Step 1 — Show what will be deleted** (no `--confirm` flag):
 
 ```bash
-uv run manage-rag-data-schemas --config assets/mcp_config.json \
+uv run rag-schema-manage --config assets/mcp_config.json \
     --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action delete \
     --key <selected-key>
@@ -79,7 +79,7 @@ Ask the user: **"Are you sure you want to permanently delete `<key>`? This canno
 **Step 2 — Execute deletion** (only if user replied exactly "DELETE"):
 
 ```bash
-uv run manage-rag-data-schemas --config assets/mcp_config.json \
+uv run rag-schema-manage --config assets/mcp_config.json \
     --corpus-name projects/visdomapp-1/locations/us-east4/ragCorpora/3419358017081049088 \
     --action delete \
     --key <selected-key> \

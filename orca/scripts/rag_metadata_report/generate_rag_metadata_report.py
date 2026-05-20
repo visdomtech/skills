@@ -20,7 +20,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from scripts.rag_metadata_report.firestore_utils import get_rag_metadata, save_rag_metadata, get_firestore_client
+from scripts.common.firestore_utils import get_rag_metadata, save_rag_metadata, get_firestore_client
 
 # Configuration
 WORKSPACE_ID = 1

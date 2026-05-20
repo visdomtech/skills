@@ -21,7 +21,7 @@ from mcp.client.streamable_http import streamable_http_client
 ASSETS_DIR = Path("assets")
 JURISDICTIONS_FILE = ASSETS_DIR / "jurisdictions.json"
 DEFAULT_OUTPUT = ASSETS_DIR / "jurisdictions_report.html"
-GENERATE_SCRIPT = Path("scripts/jurisdictions_report/generate_jurisdictions_report.py")
+GENERATE_SCRIPT = Path("scripts/report_jurisdictions/generate_jurisdictions_report.py")
 
 
 def _parse_content(result):

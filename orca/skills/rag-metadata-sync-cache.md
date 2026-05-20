@@ -40,10 +40,10 @@ If you only have the `ragFileName`, use `mcp__orca__list_rag_metadata` to verify
 
 ### Step 3: Execute the Sync Script
 
-Use the `sync-rag-metadata-cache` script to update the Firestore cache for a single document.
+Use the `rag-metadata-sync-cache` script to update the Firestore cache for a single document.
 
 ```bash
-uv run sync-rag-metadata-cache \
+uv run rag-metadata-sync-cache \
   --config assets/mcp_config.json \
   --filename "Your_Document_Name.pdf" \
   --key "jurisdiction_code" \

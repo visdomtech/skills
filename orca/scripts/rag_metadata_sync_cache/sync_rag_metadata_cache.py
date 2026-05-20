@@ -5,7 +5,7 @@ Updates the `rag_metadata_cache` collection in Firestore for a given document
 after its metadata has been updated in Vertex AI via MCP tools.
 
 Usage:
-    uv run sync-rag-metadata-cache --config assets/mcp_config.json --filename "my_doc.pdf" --key "jurisdiction_code" --value "US-CA"
+    uv run rag-metadata-sync-cache --config assets/mcp_config.json --filename "my_doc.pdf" --key "jurisdiction_code" --value "US-CA"
 """
 
 import argparse
@@ -13,7 +13,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from scripts.rag_metadata_report.firestore_utils import (
+from scripts.common.firestore_utils import (
     get_firestore_client,
     get_rag_metadata,
     save_rag_metadata,

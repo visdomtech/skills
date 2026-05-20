@@ -12,7 +12,7 @@ Creates or updates RAG metadata key-value pairs for selected documents, driven e
 - Orca MCP server access
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - `assets/compliance_documents.json` — run `fetch-compliance-documents` first if stale
-- MCP config JSON (see `create_rag_jurisdiction_metadata.md` Step 1)
+- MCP config JSON (see `rag-metadata-create-jurisdiction.md` Step 1)
 
 ## CSV Format
 
@@ -40,10 +40,10 @@ cd orca
 uv sync
 
 # Run with schema validation (default)
-uv run create-rag-metadata-from-csv --config assets/mcp_config.json --csv input.csv
+uv run rag-metadata-create-from-csv --config assets/mcp_config.json --csv input.csv
 
 # Skip key validation against list_rag_data_schemas
-uv run create-rag-metadata-from-csv --config assets/mcp_config.json --csv input.csv --skip-schema-validation
+uv run rag-metadata-create-from-csv --config assets/mcp_config.json --csv input.csv --skip-schema-validation
 ```
 
 **Parameters:**

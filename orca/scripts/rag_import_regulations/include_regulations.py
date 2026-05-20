@@ -6,8 +6,8 @@ documents by filename, imports missing documents via import_rag_files, links
 them back with set_rag_file_name, and updates their status to INDEXED.
 
 Usage:
-    uv run include-regulations --config assets/mcp_config.json
-    uv run include-regulations --config assets/mcp_config.json --dry-run
+    uv run rag-import-regulations --config assets/mcp_config.json
+    uv run rag-import-regulations --config assets/mcp_config.json --dry-run
 """
 
 import argparse

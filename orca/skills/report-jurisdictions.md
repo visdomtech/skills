@@ -20,10 +20,10 @@ cd orca
 uv sync
 
 # Run fetch + report generation
-uv run fetch-jurisdictions --config assets/mcp_config.json
+uv run report-jurisdictions-fetch --config assets/mcp_config.json
 
 # Optional: specify a custom output path
-uv run fetch-jurisdictions --config assets/mcp_config.json --output assets/my_report.html
+uv run report-jurisdictions-fetch --config assets/mcp_config.json --output assets/my_report.html
 ```
 
 The script:
@@ -286,7 +286,7 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 
 - Be opened in a web browser for preview.
 - Be copied and pasted into a Gmail compose window (the inline styles and table layout ensure it renders correctly).
-- Be sent via email — **follow `orca/skills/send_email.md`** for the correct workflow. Use `--html` to send the report as the email body, or `--attach` to send it as a file attachment (or both).
+- Be sent via email — **follow `orca/skills/send-email.md`** for the correct workflow. Use `--html` to send the report as the email body, or `--attach` to send it as a file attachment (or both).
 
 ## Automated Scripts
 
@@ -295,7 +295,7 @@ Save the generated HTML to a file in the workspace. The report is now ready to:
 Fetches jurisdictions from the Orca MCP server and generates the HTML report in one command.
 
 ```bash
-uv run fetch-jurisdictions --config assets/mcp_config.json [--output <path>]
+uv run report-jurisdictions-fetch --config assets/mcp_config.json [--output <path>]
 ```
 
 Saves raw data to `assets/jurisdictions.json`, then invokes `generate_jurisdictions_report.py` automatically.
@@ -305,7 +305,7 @@ Saves raw data to `assets/jurisdictions.json`, then invokes `generate_jurisdicti
 Can also be run standalone on previously fetched data:
 
 ```bash
-uv run python3 scripts/jurisdictions_report/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
+uv run python3 scripts/report_jurisdictions/generate_jurisdictions_report.py <path_to_jurisdictions_json> [output_file]
 ```
 
 **Parameters:**

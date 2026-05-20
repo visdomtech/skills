@@ -12,7 +12,7 @@ The script uses the document's **`rag_file_name`** as the source of truth for wh
 
 **Use this skill when:**
 - You need to make all regulations searchable in the RAG corpus
-- Downstream skills (like `create_rag_jurisdiction_metadata`) are only seeing a subset of regulations
+- Downstream skills (like `rag-metadata-create-jurisdiction`) are only seeing a subset of regulations
 - New regulations have been added but their documents have not been imported
 
 **Prerequisites:**
@@ -49,7 +49,7 @@ Always start with a dry run to generate the enriched CSV for review before impor
 cd orca
 uv sync
 
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --dry-run
@@ -74,7 +74,7 @@ The dry run:
 Use `--report-path` to customize the output location:
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --dry-run \
@@ -88,7 +88,7 @@ uv run include-regulations \
 After reviewing the enriched CSV, run the actual import:
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz
 ```
@@ -111,7 +111,7 @@ The script performs the following workflow:
 **Skip confirmation** with `--yes` (useful for CI/CD or non-interactive environments):
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --yes
@@ -120,7 +120,7 @@ uv run include-regulations \
 **Auto-detection behavior:** The script resolves `workspace_id` and `repository_id` automatically from the corpus display name. You can override with explicit flags:
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --workspace-id 1 \
@@ -136,7 +136,7 @@ Instead of importing all regulations at once, you can filter by regulation creat
 **Step 1 — Generate enriched CSV for the date batch:**
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --since-date 2026-05-19 \
@@ -149,7 +149,7 @@ Review `reports/2026-05-19_batch.csv` and confirm the rows with empty `rag_file_
 **Step 2 — Run the actual date-batched import:**
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --since-date 2026-05-19
@@ -158,7 +158,7 @@ uv run include-regulations \
 You can also combine `--since-date` and `--until-date` to target a specific window:
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --since-date 2026-05-01 \
@@ -183,7 +183,7 @@ To import only specific regulations, create a file containing one regulation ID 
 **Step 1 — Generate enriched CSV for the ID list:**
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --regulation-ids-file assets/target_regulation_ids.txt \
@@ -196,7 +196,7 @@ Review `reports/target_batch.csv` and confirm the rows with empty `rag_file_name
 **Step 2 — Run the actual ID-list import:**
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --regulation-ids-file assets/target_regulation_ids.txt
@@ -212,7 +212,7 @@ If the script is interrupted (Ctrl+C, network timeout, etc.), simply re-run the 
 - Skip `update_document_status` for document IDs already indexed
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz
 ```
@@ -222,7 +222,7 @@ Progress is tracked in `assets/include_regulations_progress.json`.
 To start completely fresh (ignore prior progress):
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --reset-progress
@@ -235,7 +235,7 @@ uv run include-regulations \
 After the import completes, verify the results:
 
 ```bash
-uv run fetch-document-rag-data --config assets/mcp_config.json
+uv run rag-document-fetch-data --config assets/mcp_config.json
 ```
 
 Open `assets/document_rag_file_report.html` and confirm that previously non-included regulations now appear as matched.
@@ -243,7 +243,7 @@ Open `assets/document_rag_file_report.html` and confirm that previously non-incl
 Alternatively, re-run the dry-run mode and confirm the "already_imported" count has increased:
 
 ```bash
-uv run include-regulations \
+uv run rag-import-regulations \
   --config assets/mcp_config.json \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --dry-run
@@ -283,7 +283,7 @@ Common error values:
 | No repository linked to corpus | Ensure the workspace has a repository with `corpus_name` set correctly |
 | All GCS URIs missing | Verify the documents were uploaded to GCS and the `gsUri` values are correct |
 | Import polling times out | Re-run the command to resume; the import may still complete server-side |
-| `set_rag_file_name` INTERNAL error | These are often false negatives; the script logs a warning and continues. Verify via `fetch-document-rag-data`. |
+| `set_rag_file_name` INTERNAL error | These are often false negatives; the script logs a warning and continues. Verify via `rag-document-fetch-data`. |
 | Resume does not skip completed work | Ensure the progress file `assets/include_regulations_progress.json` exists and is valid |
 
 ---

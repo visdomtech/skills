@@ -8,7 +8,7 @@ rag_metadata_summary/jurisdiction_codes.
 
 import asyncio
 
-from scripts.rag_metadata_report.firestore_utils import (
+from scripts.common.firestore_utils import (
     RAG_METADATA_COLLECTION,
     get_firestore_client,
     save_jurisdiction_codes,
