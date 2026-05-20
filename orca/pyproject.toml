@@ -22,6 +22,7 @@ build-jurisdiction-codes-cache = "scripts.rag_metadata_report.build_jurisdiction
 sync-rag-metadata-cache = "scripts.rag_metadata_report.sync_rag_metadata_cache:cli"
 create-rag-metadata-from-csv = "scripts.create_rag_metadata_from_csv.create_rag_metadata_from_csv:main"
 manage-rag-data-schemas = "scripts.manage_rag_data_schemas.manage_rag_data_schemas:main"
+include-regulations = "scripts.include_regulations.include_regulations:main"
 
 [tool.uv]
 default-groups = "all"
