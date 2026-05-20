@@ -62,11 +62,28 @@ def _load_regulation_ids(path: Path) -> set[int]:
 DEFAULT_CORPUS_DISPLAY_NAME = "prod-s30-w1-r6-happy-quartz"
 PROGRESS_FILE = Path("assets/include_regulations_progress.json")
 REPORT_CSV = Path("assets/include_regulations_report.csv")
-BATCH_SIZE_IMPORT = 100
+BATCH_SIZE_IMPORT = 25
 BATCH_SIZE_UPDATE = 200
 BATCH_SIZE_GCS_CHECK = 100
 POLL_INTERVAL = 10  # seconds
 MAX_POLL_TIME = 30 * 60  # 30 minutes
+GCS_BUCKET_PREFIX = "gs://df-app-files/"
+
+
+def _full_gs_uri(gs_uri: str) -> str:
+    """Convert a stored gs_uri to a full GCS URI."""
+    if not gs_uri:
+        return ""
+    if gs_uri.startswith("gs://"):
+        return gs_uri
+    return f"{GCS_BUCKET_PREFIX}{gs_uri}"
+
+
+def _relative_gs_uri(full_uri: str) -> str:
+    """Convert a full GCS URI back to the stored gs_uri format."""
+    if full_uri.startswith(GCS_BUCKET_PREFIX):
+        return full_uri[len(GCS_BUCKET_PREFIX):]
+    return full_uri
 
 
 # --- Data model ---
@@ -346,9 +363,10 @@ async def check_gcs_existence(session, candidates: list[Candidate]) -> list[Cand
             missing = set(content.get("missing") or content.get("nonExist") or [])
 
             for c in batch:
-                if c.gs_uri in existing:
+                full_uri = _full_gs_uri(c.gs_uri)
+                if full_uri in existing:
                     c.gcs_exists = True
-                elif c.gs_uri in missing:
+                elif full_uri in missing:
                     c.gcs_exists = False
                     c.error = "GCS URI does not exist"
                 else:
@@ -366,33 +384,38 @@ async def check_gcs_existence(session, candidates: list[Candidate]) -> list[Cand
     return candidates
 
 
-async def import_documents(session, corpus_name: str, candidates: list[Candidate]) -> list[Candidate]:
-    """Import candidate documents into the RAG corpus."""
-    import_candidates = [c for c in candidates if c.gcs_exists and not c.already_imported and c.document_id != -1]
-    if not import_candidates:
-        print("No documents to import")
-        return candidates
-
-    uris = [c.gs_uri for c in import_candidates]
-    print(f"Importing {len(uris)} documents into corpus...")
+async def _import_batch(session, corpus_name: str, batch: list[Candidate]) -> tuple[int, list[Candidate]]:
+    """Import a single batch of candidates and return (success_count, updated_candidates)."""
+    uris = [_full_gs_uri(c.gs_uri) for c in batch]
+    print(f"  Importing batch of {len(uris)} documents...")
 
     try:
         result = await session.call_tool("import_rag_files", {"corpusName": corpus_name, "gcsUris": uris})
+
+        if result.isError:
+            err_text = str(result.content)
+            print(f"    Import error: {err_text}")
+            for c in batch:
+                if not c.error:
+                    c.error = f"Import error: {err_text}"
+            return 0, batch
+
         content = _parse_content(result)
 
         # Track non-existent URIs reported by the import tool
         non_exist = content.get("nonExist", content.get("non_exist", []))
         if non_exist:
             non_exist_set = set(non_exist)
-            for c in import_candidates:
-                if c.gs_uri in non_exist_set:
+            for c in batch:
+                full_uri = _full_gs_uri(c.gs_uri)
+                if full_uri in non_exist_set:
                     c.error = "GCS URI reported as non-existent by import"
-            print(f"  Import skipped {len(non_exist)} non-existent URIs")
+            print(f"    Import skipped {len(non_exist)} non-existent URIs")
 
         # Poll for completion
         operation_name = content.get("operationName") or content.get("operation_name")
         if operation_name:
-            print(f"  Polling import operation: {operation_name}")
+            print(f"    Polling operation: {operation_name}")
             poll_start = time.time()
             while True:
                 await asyncio.sleep(POLL_INTERVAL)
@@ -400,28 +423,53 @@ async def import_documents(session, corpus_name: str, candidates: list[Candidate
                 poll_content = _parse_content(poll_result)
                 done = poll_content.get("done", poll_content.get("complete", False))
                 if done:
-                    print("  Import operation complete")
+                    failed = poll_content.get("failed", 0)
+                    imported = poll_content.get("imported", 0)
+                    print(f"    Import complete: {imported} imported, {failed} failed")
                     break
                 if time.time() - poll_start > MAX_POLL_TIME:
-                    print("  Warning: Import polling timed out")
-                    for c in import_candidates:
+                    print("    Warning: Import polling timed out")
+                    for c in batch:
                         if not c.error:
                             c.error = "Import polling timed out"
                     break
 
         # Mark imported candidates (unless they had errors)
-        for c in import_candidates:
+        for c in batch:
             if not c.error:
                 c.imported = True
 
-        print(f"  Import finished: {sum(1 for c in import_candidates if c.imported)} imported")
+        success = sum(1 for c in batch if c.imported)
+        print(f"    Batch finished: {success}/{len(batch)} imported")
+        return success, batch
 
     except Exception as e:
-        print(f"  Import failed: {e}")
-        for c in import_candidates:
+        print(f"    Import exception: {e}")
+        for c in batch:
             if not c.error:
                 c.error = f"Import failed: {e}"
+        return 0, batch
 
+
+async def import_documents(session, corpus_name: str, candidates: list[Candidate]) -> list[Candidate]:
+    """Import candidate documents into the RAG corpus in batches."""
+    import_candidates = [c for c in candidates if c.gcs_exists and not c.already_imported and c.document_id != -1]
+    if not import_candidates:
+        print("No documents to import")
+        return candidates
+
+    print(f"Importing {len(import_candidates)} documents into corpus in batches of {BATCH_SIZE_IMPORT}...")
+    total_success = 0
+
+    for i in range(0, len(import_candidates), BATCH_SIZE_IMPORT):
+        batch = import_candidates[i : i + BATCH_SIZE_IMPORT]
+        batch_num = i // BATCH_SIZE_IMPORT + 1
+        total_batches = (len(import_candidates) + BATCH_SIZE_IMPORT - 1) // BATCH_SIZE_IMPORT
+        print(f"  Batch {batch_num}/{total_batches}")
+        success, _ = await _import_batch(session, corpus_name, batch)
+        total_success += success
+
+    print(f"Import finished: {total_success}/{len(import_candidates)} imported")
     return candidates
 
 

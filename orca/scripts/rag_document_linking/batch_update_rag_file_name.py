@@ -99,7 +99,7 @@ async def process_batches(session, entries, workspace_id):
     return success, failed
 
 
-async def main():
+async def _async_main():
     parser = argparse.ArgumentParser(description="Batch-update rag_file_name via MCP SDK")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--csv", required=True, help="Path to CSV file from generate_document_rag_file_report.py")
@@ -148,5 +148,9 @@ async def main():
     print(f"{'='*60}")
 
 
+def main():
+    asyncio.run(_async_main())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
