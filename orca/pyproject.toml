@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rag-metadata-report = "scripts.rag_metadata_report.generate_rag_metadata_report:cli"
+rag-metadata-report = "scripts.report_rag_metadata.generate_rag_metadata_report:cli"
 rag-document-fetch-data = "scripts.rag_document_linking.fetch_document_rag_data:main"
 fetch-compliance-documents = "scripts.common.fetch_compliance_documents:main"
 send-email = "scripts.send_email.send_email:main"
@@ -18,7 +18,7 @@ report-jurisdictions-fetch = "scripts.report_jurisdictions.fetch_jurisdictions:m
 report-law-changes-fetch = "scripts.report_law_changes.fetch_law_changes:main"
 rag-metadata-create-jurisdiction = "scripts.rag_metadata_create_jurisdiction.create_rag_jurisdiction_metadata:main"
 rag-document-batch-update = "scripts.rag_document_linking.batch_update_rag_file_name:main"
-rag-metadata-build-jurisdiction-cache = "scripts.rag_metadata_report.build_jurisdiction_codes_cache:main"
+rag-metadata-build-jurisdiction-cache = "scripts.report_rag_metadata.build_jurisdiction_codes_cache:main"
 rag-metadata-sync-cache = "scripts.rag_metadata_sync_cache.sync_rag_metadata_cache:cli"
 rag-metadata-create-from-csv = "scripts.rag_metadata_create_from_csv.create_rag_metadata_from_csv:main"
 rag-schema-manage = "scripts.rag_schema_manage.manage_rag_data_schemas:main"

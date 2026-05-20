@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from scripts.common.rag_metadata import _parse_content, get_mcp_session, upsert_rag_metadata
-from scripts.rag_metadata_report.firestore_utils import get_firestore_client
+from scripts.common.firestore_utils import get_firestore_client
 
 
 # Configuration

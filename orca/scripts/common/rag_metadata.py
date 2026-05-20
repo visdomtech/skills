@@ -68,7 +68,7 @@ async def upsert_rag_metadata(session, rag_file_name, key, value, firestore_clie
     """
     # Firestore cache fast-path (skip MCP read if cache confirms current value)
     if firestore_client:
-        from scripts.rag_metadata_report.firestore_utils import get_rag_metadata, save_rag_metadata
+        from scripts.common.firestore_utils import get_rag_metadata, save_rag_metadata
         filename = rag_file_name.split("/")[-1] if "/" in rag_file_name else rag_file_name
         try:
             cached = await get_rag_metadata(firestore_client, filename)
@@ -94,7 +94,7 @@ async def upsert_rag_metadata(session, rag_file_name, key, value, firestore_clie
         if firestore_client:
             try:
                 filename = rag_file_name.split("/")[-1] if "/" in rag_file_name else rag_file_name
-                from scripts.rag_metadata_report.firestore_utils import save_rag_metadata
+                from scripts.common.firestore_utils import save_rag_metadata
                 await save_rag_metadata(
                     client=firestore_client,
                     rag_file_name=rag_file_name,
