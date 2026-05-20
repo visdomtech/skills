@@ -157,7 +157,7 @@ async def fetch_non_included_regulations(session, workspace_id: int) -> list[dic
         {"workspaceId": workspace_id, "limit": 2**31 - 1, "included": False}
     )
     content = _parse_content(result)
-    regs = content.get("regulations", [])
+    regs = content.get("regulations") or []
     non_included = [r for r in regs if not r.get("included", True)]
     print(f"Found {len(non_included)} non-included regulations out of {len(regs)} total")
     return non_included
@@ -171,7 +171,7 @@ async def fetch_documents(session, workspace_id: int, repository_id: int) -> lis
         {"workspaceId": workspace_id, "repositoryId": repository_id, "limit": 2**31 - 1}
     )
     content = _parse_content(result)
-    docs = content.get("documents", [])
+    docs = content.get("documents") or []
     print(f"Fetched {len(docs)} documents")
     return docs
 
@@ -240,6 +240,56 @@ def match_regulations_to_documents(regulations: list[dict], documents: list[dict
     return candidates
 
 
+async def create_missing_documents(session, workspace_id: int, repository_id: int, candidates: list[Candidate]) -> tuple[int, list[str]]:
+    """Create document records for missing files and return count + errors."""
+    missing = [c for c in candidates if c.document_id == -1]
+    if not missing:
+        return 0, []
+
+    # Deduplicate by filename
+    unique_missing: dict[str, Candidate] = {}
+    for c in missing:
+        if c.filename not in unique_missing:
+            unique_missing[c.filename] = c
+
+    print(f"Creating {len(unique_missing)} missing document records...")
+    created = 0
+    errors: list[str] = []
+
+    for c in unique_missing.values():
+        gs_uri = f"regulations/{workspace_id}/{c.filename}"
+        try:
+            result = await session.call_tool(
+                "create_document",
+                {
+                    "workspaceId": workspace_id,
+                    "repositoryId": repository_id,
+                    "filename": c.filename,
+                    "documentType": "PDF",
+                    "uploadedBy": 2,
+                    "gsUri": gs_uri,
+                },
+            )
+            if result.isError:
+                err_text = str(result.content)
+                errors.append(f"Failed to create document for '{c.filename}': {err_text}")
+                print(f"  Error creating '{c.filename}': {err_text}")
+            else:
+                content = _parse_content(result)
+                doc_id = content.get("documentId") or content.get("document_id")
+                if doc_id:
+                    created += 1
+                    print(f"  Created document {doc_id} for '{c.filename}'")
+                else:
+                    errors.append(f"Created document but no ID returned for '{c.filename}'")
+        except Exception as e:
+            errors.append(f"Exception creating document for '{c.filename}': {e}")
+            print(f"  Exception creating '{c.filename}': {e}")
+
+    print(f"Document creation complete: {created}/{len(unique_missing)} created")
+    return created, errors
+
+
 async def check_gcs_existence(session, candidates: list[Candidate]) -> list[Candidate]:
     """Check which candidate GCS URIs exist. Always runs per spec."""
     # Filter to candidates that need checking
@@ -258,8 +308,8 @@ async def check_gcs_existence(session, candidates: list[Candidate]) -> list[Cand
         try:
             result = await session.call_tool("check_gcs_existence", {"gcsUris": uris})
             content = _parse_content(result)
-            existing = set(content.get("existing", content.get("exist", [])))
-            missing = set(content.get("missing", content.get("nonExist", [])))
+            existing = set(content.get("existing") or content.get("exist") or [])
+            missing = set(content.get("missing") or content.get("nonExist") or [])
 
             for c in batch:
                 if c.gs_uri in existing:
@@ -617,6 +667,16 @@ async def async_main():
         regulations = await fetch_non_included_regulations(session, workspace_id)
         documents = await fetch_documents(session, workspace_id, repository_id)
         candidates = match_regulations_to_documents(regulations, documents)
+
+        # Create missing documents (non-dry-run only)
+        if not args.dry_run:
+            created_count, _ = await create_missing_documents(
+                session, workspace_id, repository_id, candidates
+            )
+            if created_count > 0:
+                print(f"\nRe-fetching documents after creating {created_count} new records...")
+                documents = await fetch_documents(session, workspace_id, repository_id)
+                candidates = match_regulations_to_documents(regulations, documents)
 
         # Check GCS existence (always, per spec)
         candidates = await check_gcs_existence(session, candidates)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bulk-import documents for non-included regulations into the Vertex AI RAG corpus. This skill finds all regulations where `included == false`, matches them to repository documents by filename, imports the missing documents via `import_rag_files`, links them back with `set_rag_file_name`, and updates their processing status to `INDEXED`.
+Bulk-import documents for non-included regulations into the Vertex AI RAG corpus. This skill finds all regulations where `included == false`, matches them to repository documents by filename, **auto-creates any missing document records** via `create_document`, imports the documents via `import_rag_files`, links them back with `set_rag_file_name`, and updates their processing status to `INDEXED`.
 
 **Use this skill when:**
 - You need to make all regulations searchable in the RAG corpus
@@ -57,6 +57,8 @@ The dry run:
 5. Generates `assets/include_regulations_report.csv` with analysis results
 6. Prints a console summary
 
+> **Note:** Dry-run does **not** create missing documents. The full import (Step 3) will automatically call `create_document` for any missing files before proceeding.
+
 **Review the CSV before proceeding.** It contains columns:
 - `regulation_id`, `regulation_short_title`, `jurisdiction_code`
 - `filename`, `document_id`, `gs_uri`
@@ -79,11 +81,12 @@ The script performs the following workflow:
 1. **Resolve corpus** — Finds the corpus by display name and locates the matching workspace/repository
 2. **Fetch data** — Loads non-included regulations and repository documents
 3. **Match** — Links regulations to documents via the `filenames` array
-4. **GCS check** — Verifies all candidate GCS URIs exist before importing
-5. **Import** — Calls `import_rag_files` and polls `get_import_rag_files_result` until complete
-6. **Link** — Calls `set_rag_file_name` in batches of 200 to link documents to RAG files
-7. **Status update** — Calls `update_document_status` with `"INDEXED"` in batches of 200
-8. **Report** — Generates `assets/include_regulations_report.csv` and console summary
+4. **Create missing** — For any regulation whose filename has no matching document, calls `create_document` to add the missing record, then re-fetches and re-matches
+5. **GCS check** — Verifies all candidate GCS URIs exist before importing
+6. **Import** — Calls `import_rag_files` and polls `get_import_rag_files_result` until complete
+7. **Link** — Calls `set_rag_file_name` in batches of 200 to link documents to RAG files
+8. **Status update** — Calls `update_document_status` with `"INDEXED"` in batches of 200
+9. **Report** — Generates `assets/include_regulations_report.csv` and console summary
 
 **Auto-detection behavior:** The script resolves `workspace_id` and `repository_id` automatically from the corpus display name. You can override with explicit flags:
 
@@ -163,6 +166,8 @@ Common error values:
 - `GCS URI reported as non-existent by import` — Import tool could not access the URI
 - `Import polling timed out` — The async import operation did not complete within 30 minutes
 - `RAG file not found after import` — The imported file did not appear in `list_rag_files`
+- `Failed to create document for '{filename}'` — `create_document` returned an error for a missing file
+- `Exception creating document for '{filename}'` — An unexpected error occurred during `create_document`
 
 ---
 
