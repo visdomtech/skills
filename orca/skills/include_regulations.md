@@ -2,7 +2,13 @@
 
 ## Overview
 
-Bulk-import documents for non-included regulations into the Vertex AI RAG corpus. This skill finds all regulations where `included == false`, matches them to repository documents by filename, **auto-creates any missing document records** via `create_document`, imports the documents via `import_rag_files`, links them back with `set_rag_file_name`, and updates their processing status to `INDEXED`.
+Bulk-import documents for regulations into the Vertex AI RAG corpus. This skill follows a clear 3-step workflow:
+
+1. **Generate enriched CSV** — Fetches all regulations, matches them to documents, and writes an enriched CSV for review
+2. **Review & confirm** — Review the CSV summary showing which documents need import (empty `rag_file_name`), then confirm before proceeding
+3. **Process import** — Imports all documents with missing/empty `rag_file_name` into RAG, links them with `set_rag_file_name`, and updates status to `INDEXED`
+
+The script uses the document's **`rag_file_name`** as the source of truth for whether import is needed. Missing document records are **auto-created** via `create_document` when needed.
 
 **Use this skill when:**
 - You need to make all regulations searchable in the RAG corpus
@@ -35,9 +41,9 @@ Save as `assets/mcp_config.json`. **Never commit API keys.**
 
 ---
 
-## Step 2: Dry Run (Recommended First)
+## Step 2: Generate Enriched CSV (Dry Run)
 
-Always start with a dry run to see what would be imported before making any mutations:
+Always start with a dry run to generate the enriched CSV for review before importing:
 
 ```bash
 cd orca
@@ -50,25 +56,36 @@ uv run include-regulations \
 ```
 
 The dry run:
-1. Fetches all non-included regulations (`list_regulations` with `included: false`)
+1. Fetches all regulations (`list_regulations`)
 2. Fetches all documents in the matching repository (`list_documents`)
 3. Matches regulations to documents by filename
 4. Checks GCS existence for all candidate URIs (`check_gcs_existence`)
-5. Generates `assets/include_regulations_report.csv` with analysis results
-6. Prints a console summary
+5. Generates `assets/include_regulations_enriched.csv` with full regulation + document data
+6. Prints a **Pre-Import Summary** showing how many need import
 
-> **Note:** Dry-run does **not** create missing documents. The full import (Step 3) will automatically call `create_document` for any missing files before proceeding.
+> **Note:** Dry-run does **not** create missing documents or import anything. The full import (Step 3) will automatically call `create_document` for any missing files before proceeding.
 
-**Review the CSV before proceeding.** It contains columns:
-- `regulation_id`, `regulation_short_title`, `jurisdiction_code`
-- `filename`, `document_id`, `gs_uri`
-- `already_imported`, `gcs_exists`, `error`
+**Review the enriched CSV before proceeding.** It contains columns:
+- `regulation_id`, `short_title`, `official_title`, `jurisdiction_code`
+- `category`, `status`, `created_at`, `effective_date`, `statute_code`
+- `filenames`, `document_id`, `upload_date`, `gs_uri`, `document_status`
+- `rag_file_name` (empty = needs import), `document_workspace_id`, `document_repository_id`
+
+Use `--report-path` to customize the output location:
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --dry-run \
+  --report-path reports/2026-05-19_batch.csv
+```
 
 ---
 
-## Step 3: Run Full Import
+## Step 3: Run Full Import (with Confirmation)
 
-After reviewing the dry-run output, run the actual import:
+After reviewing the enriched CSV, run the actual import:
 
 ```bash
 uv run include-regulations \
@@ -79,14 +96,26 @@ uv run include-regulations \
 The script performs the following workflow:
 
 1. **Resolve corpus** — Finds the corpus by display name and locates the matching workspace/repository
-2. **Fetch data** — Loads non-included regulations and repository documents
+2. **Fetch data** — Loads all regulations and repository documents
 3. **Match** — Links regulations to documents via the `filenames` array
-4. **Create missing** — For any regulation whose filename has no matching document, calls `create_document` to add the missing record, then re-fetches and re-matches
-5. **GCS check** — Verifies all candidate GCS URIs exist before importing
-6. **Import** — Calls `import_rag_files` and polls `get_import_rag_files_result` until complete
-7. **Link** — Calls `set_rag_file_name` in batches of 200 to link documents to RAG files
-8. **Status update** — Calls `update_document_status` with `"INDEXED"` in batches of 200
-9. **Report** — Generates `assets/include_regulations_report.csv` and console summary
+4. **Generate enriched CSV** — Writes `assets/include_regulations_enriched.csv` for review
+5. **Pre-import summary** — Shows how many documents already have `rag_file_name` vs. need import
+6. **Confirmation prompt** — Asks "Proceed with importing? [y/N]" before mutating data
+7. **Create missing** — For any regulation whose filename has no matching document, calls `create_document` to add the missing record, then re-fetches and re-matches
+8. **GCS check** — Verifies all candidate GCS URIs exist before importing
+9. **Import** — Calls `import_rag_files` and polls `get_import_rag_files_result` until complete
+10. **Link** — Calls `set_rag_file_name` in batches of 200 to link documents to RAG files
+11. **Status update** — Calls `update_document_status` with `"INDEXED"` in batches of 200
+12. **Report** — Generates `assets/include_regulations_report.csv` with operation results
+
+**Skip confirmation** with `--yes` (useful for CI/CD or non-interactive environments):
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --yes
+```
 
 **Auto-detection behavior:** The script resolves `workspace_id` and `repository_id` automatically from the corpus display name. You can override with explicit flags:
 
@@ -96,6 +125,81 @@ uv run include-regulations \
   --corpus-display-name prod-s30-w1-r6-happy-quartz \
   --workspace-id 1 \
   --repository-id 6
+```
+
+---
+
+## Step 3a: Batch Import by Date
+
+Instead of importing all regulations at once, you can filter by regulation creation date. This is useful when a new batch of regulations has just been added (e.g., a set of AI regulations created on 2026-05-19).
+
+**Step 1 — Generate enriched CSV for the date batch:**
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --since-date 2026-05-19 \
+  --dry-run \
+  --report-path reports/2026-05-19_batch.csv
+```
+
+Review `reports/2026-05-19_batch.csv` and confirm the rows with empty `rag_file_name` are the ones you want to import.
+
+**Step 2 — Run the actual date-batched import:**
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --since-date 2026-05-19
+```
+
+You can also combine `--since-date` and `--until-date` to target a specific window:
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --since-date 2026-05-01 \
+  --until-date 2026-05-31 \
+  --dry-run
+```
+
+---
+
+## Step 3b: Batch Import from ID List
+
+To import only specific regulations, create a file containing one regulation ID per line (or a CSV where the first column is the regulation ID) and pass it with `--regulation-ids-file`.
+
+**Example ID list file (`assets/target_regulation_ids.txt`):**
+
+```
+2489
+2486
+2502
+```
+
+**Step 1 — Generate enriched CSV for the ID list:**
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --regulation-ids-file assets/target_regulation_ids.txt \
+  --dry-run \
+  --report-path reports/target_batch.csv
+```
+
+Review `reports/target_batch.csv` and confirm the rows with empty `rag_file_name` are the ones you want to import.
+
+**Step 2 — Run the actual ID-list import:**
+
+```bash
+uv run include-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --regulation-ids-file assets/target_regulation_ids.txt
 ```
 
 ---
@@ -186,8 +290,12 @@ Common error values:
 
 ## Key Takeaways
 
-1. **Always dry-run first** to understand the scope before mutating data
-2. **Resume is safe** — re-running the same command picks up where it left off
-3. **GCS existence is checked automatically** before every import (no flag needed)
-4. **Batch sizes are tuned** — 100 for import, 200 for updates, matching existing script patterns
-5. **Report everything** — the CSV is the source of truth for what happened to each candidate
+1. **3-step workflow** — Generate enriched CSV → Review & confirm → Process import
+2. **Always dry-run first** to generate the enriched CSV and understand the scope before mutating data
+3. **rag_file_name is the gate** — Documents with existing `rag_file_name` are skipped; only empty ones are imported
+4. **Confirmation prompt** — The script asks before importing unless you pass `--yes`
+5. **Resume is safe** — re-running the same command picks up where it left off
+6. **GCS existence is checked automatically** before every import (no flag needed)
+7. **Batch sizes are tuned** — 100 for import, 200 for updates, matching existing script patterns
+8. **Two CSVs are generated** — The enriched CSV (for pre-import review) and the operation report CSV (for post-import results)
+9. **Batch filtering is available** — use `--since-date`, `--until-date`, or `--regulation-ids-file` to target specific regulation batches instead of processing everything at once

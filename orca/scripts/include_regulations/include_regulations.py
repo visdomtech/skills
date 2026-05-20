@@ -18,10 +18,45 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from scripts.common.rag_metadata import _parse_content, get_mcp_session
+
+
+def _parse_iso_date(date_str: str) -> datetime:
+    """Parse an ISO date string (YYYY-MM-DD or full ISO timestamp)."""
+    date_str = date_str.strip()
+    try:
+        dt = datetime.fromisoformat(date_str)
+        # If naive, assume UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Invalid date format: {date_str!r}. Expected YYYY-MM-DD or ISO timestamp.") from e
+
+
+def _load_regulation_ids(path: Path) -> set[int]:
+    """Load regulation IDs from a text or CSV file (one ID per line)."""
+    ids: set[int] = set()
+    with open(path, newline="") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            # If line looks like CSV with commas, take the first column
+            if "," in line:
+                line = line.split(",")[0].strip()
+            try:
+                ids.add(int(line))
+            except ValueError:
+                continue
+    return ids
 
 # --- Configuration ---
 DEFAULT_CORPUS_DISPLAY_NAME = "prod-s30-w1-r6-happy-quartz"
@@ -149,18 +184,17 @@ async def resolve_corpus_and_workspace(session, corpus_display_name: str) -> tup
     return corpus_name, workspace_id, repository_id
 
 
-async def fetch_non_included_regulations(session, workspace_id: int) -> list[dict]:
-    """Fetch all regulations where included == false."""
-    print(f"Fetching non-included regulations for workspace {workspace_id}...")
+async def fetch_regulations(session, workspace_id: int) -> list[dict]:
+    """Fetch all regulations for the workspace."""
+    print(f"Fetching regulations for workspace {workspace_id}...")
     result = await session.call_tool(
         "list_regulations",
-        {"workspaceId": workspace_id, "limit": 2**31 - 1, "included": False}
+        {"workspaceId": workspace_id, "limit": 2**31 - 1}
     )
     content = _parse_content(result)
     regs = content.get("regulations") or []
-    non_included = [r for r in regs if not r.get("included", True)]
-    print(f"Found {len(non_included)} non-included regulations out of {len(regs)} total")
-    return non_included
+    print(f"Found {len(regs)} regulations")
+    return regs
 
 
 async def fetch_documents(session, workspace_id: int, repository_id: int) -> list[dict]:
@@ -551,8 +585,104 @@ async def update_document_statuses(session, workspace_id: int, candidates: list[
     return candidates
 
 
+def generate_enriched_csv(
+    regulations: list[dict],
+    documents: list[dict],
+    candidates: list[Candidate],
+    output_path: Path,
+    workspace_id: int = 0,
+    repository_id: int = 0,
+) -> None:
+    """Write an enriched CSV report for human review before importing.
+
+    Columns match the format of regulations_created_after_2026-05-10_enriched.csv.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build maps
+    doc_map: dict[str, dict] = {}
+    for doc in documents:
+        fname = doc.get("filename")
+        if fname:
+            doc_map[fname] = doc
+
+    candidate_map: dict[str, Candidate] = {}
+    for c in candidates:
+        if c.filename:
+            candidate_map[c.filename] = c
+
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "regulation_id", "short_title", "official_title", "jurisdiction_code",
+            "category", "status", "created_at", "effective_date", "statute_code",
+            "filenames", "document_id", "upload_date", "gs_uri", "document_status",
+            "rag_file_name", "document_workspace_id", "document_repository_id",
+        ])
+        for reg in regulations:
+            # Regulation data may be nested under a "regulation" key
+            reg_data = reg.get("regulation") or reg
+            reg_id = reg_data.get("regulation_id") or reg_data.get("id") or reg.get("id") or reg.get("regulation_id")
+            short_title = reg_data.get("short_title") or reg_data.get("shortTitle") or ""
+            official_title = reg_data.get("official_title") or reg_data.get("officialTitle") or ""
+            jurisdiction = reg_data.get("jurisdiction", {}) or reg.get("jurisdiction", {})
+            jurisdiction_code = jurisdiction.get("code") if isinstance(jurisdiction, dict) else ""
+            category = reg_data.get("category") or ""
+            status = reg_data.get("status") or ""
+            created_at = reg_data.get("created_at") or ""
+            effective_date = reg_data.get("effective_date") or ""
+            statute_code = reg_data.get("statute_code") or ""
+            # filenames may be at top level even when other fields are nested
+            filenames = reg.get("filenames", []) or reg_data.get("filenames", [])
+            if not isinstance(filenames, list):
+                filenames = [filenames] if filenames else []
+
+            for fname in filenames:
+                doc = doc_map.get(fname)
+                c = candidate_map.get(fname)
+
+                if doc:
+                    doc_id = doc.get("id") or doc.get("document_id") or ""
+                    upload_date = doc.get("uploaded_at") or doc.get("uploadDate") or doc.get("created_at") or ""
+                    gs_uri = doc.get("gs_uri") or doc.get("gsUri") or ""
+                    doc_status = doc.get("status") or ""
+                    rag_name = doc.get("rag_file_name") or doc.get("ragFileName") or ""
+                    ws_id = doc.get("workspace_id") or doc.get("workspaceId") or workspace_id
+                    repo_id = doc.get("repository_id") or doc.get("repositoryId") or repository_id
+                else:
+                    doc_id = ""
+                    upload_date = ""
+                    gs_uri = ""
+                    doc_status = ""
+                    rag_name = ""
+                    ws_id = workspace_id
+                    repo_id = repository_id
+
+                writer.writerow([
+                    reg_id,
+                    short_title,
+                    official_title,
+                    jurisdiction_code,
+                    category,
+                    status,
+                    created_at,
+                    effective_date,
+                    statute_code,
+                    fname,
+                    doc_id,
+                    upload_date,
+                    gs_uri,
+                    doc_status,
+                    rag_name,
+                    ws_id,
+                    repo_id,
+                ])
+
+    print(f"Enriched report saved to {output_path}")
+
+
 def generate_csv_report(candidates: list[Candidate], output_path: Path) -> None:
-    """Write a CSV report of the operation."""
+    """Write a CSV report of the import operation results."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", newline="") as f:
@@ -578,7 +708,7 @@ def generate_csv_report(candidates: list[Candidate], output_path: Path) -> None:
                 c.error,
             ])
 
-    print(f"Report saved to {output_path}")
+    print(f"Operation report saved to {output_path}")
 
 
 def print_summary(candidates: list[Candidate]) -> None:
@@ -606,6 +736,31 @@ def print_summary(candidates: list[Candidate]) -> None:
     print(f"{'='*60}")
 
 
+def print_pre_import_summary(candidates: list[Candidate]) -> None:
+    """Print a summary before importing, highlighting what needs import."""
+    total = len(candidates)
+    already = sum(1 for c in candidates if c.already_imported)
+    need_import = total - already
+    missing_doc = sum(1 for c in candidates if c.document_id == -1)
+    missing_gcs = sum(1 for c in candidates if c.gcs_exists is False)
+
+    print(f"\n{'='*60}")
+    print("PRE-IMPORT SUMMARY")
+    print(f"{'='*60}")
+    print(f"Total regulation documents: {total}")
+    print(f"  Already imported (have rag_file_name): {already}")
+    print(f"  Need import (rag_file_name empty):     {need_import}")
+    print(f"  Missing document records:              {missing_doc}")
+    print(f"  Missing GCS URIs:                      {missing_gcs}")
+    print(f"{'='*60}")
+
+    if need_import == 0:
+        print("\nNo documents need importing. Exiting.")
+        return False
+
+    return True
+
+
 # --- Main orchestrator ---
 
 async def async_main():
@@ -615,8 +770,13 @@ async def async_main():
                         help=f"Corpus display name (default: {DEFAULT_CORPUS_DISPLAY_NAME})")
     parser.add_argument("--workspace-id", type=int, default=None, help="Workspace ID (optional, auto-detected by default)")
     parser.add_argument("--repository-id", type=int, default=None, help="Repository ID (optional, auto-detected by default)")
-    parser.add_argument("--dry-run", action="store_true", help="Analyze only; do not import or mutate")
+    parser.add_argument("--dry-run", action="store_true", help="Analyze only; generate enriched CSV and exit without importing")
     parser.add_argument("--reset-progress", action="store_true", help="Clear progress file and start fresh")
+    parser.add_argument("--since-date", type=_parse_iso_date, default=None, help="Only process regulations created on or after this date (YYYY-MM-DD)")
+    parser.add_argument("--until-date", type=_parse_iso_date, default=None, help="Only process regulations created on or before this date (YYYY-MM-DD)")
+    parser.add_argument("--regulation-ids-file", type=Path, default=None, help="Path to a file containing regulation IDs to process (one per line)")
+    parser.add_argument("--report-path", type=Path, default=Path("assets/include_regulations_enriched.csv"), help="Path for the enriched CSV report (default: assets/include_regulations_enriched.csv)")
+    parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt and proceed with import")
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -664,7 +824,44 @@ async def async_main():
         save_progress(progress)
 
         # Fetch data
-        regulations = await fetch_non_included_regulations(session, workspace_id)
+        regulations = await fetch_regulations(session, workspace_id)
+
+        # Apply optional filters
+        if args.since_date or args.until_date:
+            before = len(regulations)
+            filtered = []
+            for r in regulations:
+                reg_data = r.get("regulation", {})
+                created_str = reg_data.get("created_at", "")
+                if not created_str:
+                    continue
+                try:
+                    created = datetime.fromisoformat(created_str)
+                    if created.tzinfo is None:
+                        created = created.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+                if args.since_date and created < args.since_date:
+                    continue
+                if args.until_date and created > args.until_date:
+                    continue
+                filtered.append(r)
+            regulations = filtered
+            print(f"Date filter applied: {before} -> {len(regulations)} regulations")
+
+        if args.regulation_ids_file:
+            if not args.regulation_ids_file.exists():
+                print(f"Error: Regulation IDs file not found: {args.regulation_ids_file}")
+                raise SystemExit(1)
+            id_set = _load_regulation_ids(args.regulation_ids_file)
+            before = len(regulations)
+            regulations = [r for r in regulations if (r.get("regulation", {}).get("regulation_id") or r.get("id") or r.get("regulation_id")) in id_set]
+            print(f"ID filter applied: {before} -> {len(regulations)} regulations (loaded {len(id_set)} IDs from file)")
+
+        if not regulations:
+            print("No regulations match the specified filters. Exiting.")
+            return
+
         documents = await fetch_documents(session, workspace_id, repository_id)
         candidates = match_regulations_to_documents(regulations, documents)
 
@@ -683,11 +880,30 @@ async def async_main():
         progress["step"] = "gcs_check"
         save_progress(progress)
 
+        # Step 1: Generate enriched CSV for review
+        generate_enriched_csv(regulations, documents, candidates, args.report_path, workspace_id, repository_id)
+
+        # Step 2: Print summary and ask for confirmation
+        has_work = print_pre_import_summary(candidates)
+        if not has_work:
+            return
+
         if args.dry_run:
             print("\n*** DRY RUN — no mutations performed ***")
-            generate_csv_report(candidates, REPORT_CSV)
-            print_summary(candidates)
+            print("Review the enriched CSV above, then re-run without --dry-run to import.")
             return
+
+        if not args.yes:
+            try:
+                response = input("\nProceed with importing? [y/N]: ").strip().lower()
+            except (EOFError, OSError):
+                print("Non-interactive mode detected. Use --yes to skip confirmation.")
+                raise SystemExit(1)
+            if response not in ("y", "yes"):
+                print("Aborted by user.")
+                return
+
+        print("\nProceeding with import...")
 
         # Import to RAG
         if progress["step"] in ("analysis", "gcs_check"):
