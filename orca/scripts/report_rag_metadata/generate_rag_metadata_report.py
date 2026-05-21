@@ -88,7 +88,37 @@ def _parse_content(result):
     return {}
 
 
-async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, force_refresh=False):
+def build_filename_to_regulation(regulations: list[dict]) -> dict[str, dict]:
+    """Build a mapping from filename to regulation data."""
+    mapping = {}
+    for reg in regulations:
+        # Regulation data may be nested under a "regulation" key
+        reg_data = reg.get("regulation") or reg
+        reg_id = reg_data.get("regulation_id") or reg_data.get("id")
+        created_at = reg_data.get("created_at", "")
+        filenames = reg.get("filenames", [])
+        for fname in filenames:
+            if fname:
+                mapping[fname] = {
+                    "regulation_id": reg_id,
+                    "created_at": created_at,
+                }
+    return mapping
+
+
+async def fetch_regulations(session, workspace_id: int) -> list[dict]:
+    """Fetch all regulations for the workspace."""
+    result = await session.call_tool(
+        "list_regulations",
+        {"workspaceId": workspace_id, "limit": 2**31 - 1}
+    )
+    content = _parse_content(result)
+    regs = content.get("regulations") or []
+    print(f"Fetched {len(regs)} regulations")
+    return regs
+
+
+async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, force_refresh=False, filename_to_regulation=None):
     """Fetch metadata for a single document with concurrency control and Firestore caching.
     
     Args:
@@ -98,16 +128,22 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
         total: Total number of documents for progress tracking.
         firestore_client: Optional Firestore client for caching.
         force_refresh: If True, always fetch from MCP instead of using cache.
+        filename_to_regulation: Optional mapping from filename to regulation data.
     """
     global PROGRESS_COUNTER
     rag_name = doc.get("rag_file_name")
     filename = doc.get("filename", "Unknown")
+    
+    # Get regulation data if available
+    reg_data = filename_to_regulation.get(filename, {}) if filename_to_regulation else {}
     
     if not rag_name:
         result = {
             "filename": filename,
             "rag_file_name": "",
             "uploaded": doc.get("uploaded_at", ""),
+            "regulation_id": reg_data.get("regulation_id", ""),
+            "created_at": reg_data.get("created_at", ""),
             "metadata": [],
             "error": "No rag_file_name"
         }
@@ -125,6 +161,8 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                         "filename": cached["filename"],
                         "rag_file_name": cached["rag_file_name"],
                         "uploaded": doc.get("uploaded_at", ""),
+                        "regulation_id": reg_data.get("regulation_id", ""),
+                        "created_at": reg_data.get("created_at", ""),
                         "metadata": cached["metadata"],
                         "error": cached.get("error"),
                     }
@@ -142,6 +180,8 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                     "filename": filename,
                     "rag_file_name": rag_name,
                     "uploaded": doc.get("uploaded_at", ""),
+                    "regulation_id": reg_data.get("regulation_id", ""),
+                    "created_at": reg_data.get("created_at", ""),
                     "metadata": metadata,
                     "error": None
                 }
@@ -159,6 +199,8 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
                     "filename": filename,
                     "rag_file_name": rag_name,
                     "uploaded": doc.get("uploaded_at", ""),
+                    "regulation_id": reg_data.get("regulation_id", ""),
+                    "created_at": reg_data.get("created_at", ""),
                     "metadata": [],
                     "error": str(e)
                 }
@@ -197,11 +239,15 @@ def generate_csv(results):
     rows = []
     for res in results:
         uploaded = res.get("uploaded", "")
+        regulation_id = res.get("regulation_id", "")
+        created_at = res.get("created_at", "")
         if res["error"] and res["error"] != "No rag_file_name":
             rows.append({
                 "filename": res["filename"],
                 "rag_file_name": res["rag_file_name"],
                 "uploaded": uploaded,
+                "regulation_id": regulation_id,
+                "created_at": created_at,
                 "metadata_key": "ERROR",
                 "metadata_value": res["error"]
             })
@@ -210,6 +256,8 @@ def generate_csv(results):
                 "filename": res["filename"],
                 "rag_file_name": res["rag_file_name"],
                 "uploaded": uploaded,
+                "regulation_id": regulation_id,
+                "created_at": created_at,
                 "metadata_key": "",
                 "metadata_value": ""
             })
@@ -219,12 +267,14 @@ def generate_csv(results):
                     "filename": res["filename"],
                     "rag_file_name": res["rag_file_name"],
                     "uploaded": uploaded,
+                    "regulation_id": regulation_id,
+                    "created_at": created_at,
                     "metadata_key": entry.get("key", ""),
                     "metadata_value": entry.get("value", "")
                 })
 
     with open(CSV_OUTPUT, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["filename", "rag_file_name", "uploaded", "metadata_key", "metadata_value"])
+        writer = csv.DictWriter(f, fieldnames=["filename", "rag_file_name", "uploaded", "regulation_id", "created_at", "metadata_key", "metadata_value"])
         writer.writeheader()
         writer.writerows(rows)
     
@@ -411,8 +461,13 @@ async def main():
 
     try:
         async with get_mcp_session(config) as session:
+            # Fetch regulations and build filename mapping
+            regulations = await fetch_regulations(session, WORKSPACE_ID)
+            filename_to_regulation = build_filename_to_regulation(regulations)
+            print(f"Built filename-to-regulation mapping for {len(filename_to_regulation)} files", flush=True)
+            
             tasks = [
-                fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh)
+                fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh, filename_to_regulation)
                 for doc in documents
             ]
 
@@ -420,12 +475,16 @@ async def main():
             raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for i, res in enumerate(raw_results):
+                doc = documents[i]
+                reg_data = filename_to_regulation.get(doc.get("filename", ""), {})
                 if isinstance(res, Exception):
                     print(f"  Warning: Task {i} failed: {res}", flush=True)
                     results.append({
-                        "filename": documents[i].get("filename", "Unknown"),
-                        "rag_file_name": documents[i].get("rag_file_name", ""),
-                        "uploaded": documents[i].get("uploaded_at", ""),
+                        "filename": doc.get("filename", "Unknown"),
+                        "rag_file_name": doc.get("rag_file_name", ""),
+                        "uploaded": doc.get("uploaded_at", ""),
+                        "regulation_id": reg_data.get("regulation_id", ""),
+                        "created_at": reg_data.get("created_at", ""),
                         "metadata": [],
                         "error": str(res)
                     })
