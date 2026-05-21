@@ -33,6 +33,15 @@ Wisconsin Statutes Chapter 600.pdf,jurisdiction_code,US-WI
 Wisconsin Statutes Chapter 600.pdf,category,insurance
 ```
 
+### Using `rag_metadata_report.csv` as Input
+
+The script also accepts the output from `report-rag-metadata` (e.g., `rag_metadata_report.csv`), which uses `metadata_key` / `metadata_value` instead of `key` / `value`. This is useful for batch-applying metadata that was prepared in the report.
+
+```csv
+filename,rag_file_name,uploaded,regulation_id,created_at,metadata_key,metadata_value
+Nevada Administrative Code Chapter 686B Insurance.pdf,...,...,...,...,jurisdiction_code,US-NV
+```
+
 ## Usage
 
 ```bash
@@ -55,7 +64,7 @@ uv run rag-metadata-create-from-csv --config assets/mcp_config.json --csv input.
 
 Before any writes, the script validates:
 
-1. **Filename check**: Every `filename` in the CSV must exist in `compliance_documents.json`. Unmatched filenames are printed and the script aborts.
+1. **Filename check**: Every `filename` in the CSV must exist in `compliance_documents.json` and have a `rag_file_name`. Documents without a `rag_file_name` (not yet imported to RAG) are skipped with a warning rather than aborting the entire batch.
 2. **Schema key check**: Calls `list_rag_data_schemas` at startup to fetch valid key names. Any `key` not in that set is printed and the script aborts. Use `--skip-schema-validation` to bypass.
 
 ## Upsert Logic

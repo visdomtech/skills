@@ -44,16 +44,29 @@ def load_documents():
 
 
 def load_csv(csv_path):
-    """Return list of {filename, key, value} dicts from the CSV."""
+    """Return list of {filename, key, value} dicts from the CSV.
+
+    Supports two formats:
+      - Standard: filename, key, value
+      - Report CSV: filename, ..., metadata_key, metadata_value
+    """
     path = Path(csv_path)
     if not path.exists():
         print(f"Error: CSV file not found: {csv_path}")
         raise SystemExit(1)
     with open(path, newline="") as f:
         reader = csv.DictReader(f)
+        fieldnames = set(reader.fieldnames or [])
+        # Detect report CSV format (from rag_metadata_report.csv)
+        if "metadata_key" in fieldnames and "metadata_value" in fieldnames:
+            return [
+                {"filename": r["filename"].strip(), "key": r["metadata_key"].strip(), "value": r["metadata_value"].strip()}
+                for r in reader
+            ]
+        # Standard format
         required = {"filename", "key", "value"}
-        if not required.issubset(set(reader.fieldnames or [])):
-            missing = required - set(reader.fieldnames or [])
+        if not required.issubset(fieldnames):
+            missing = required - fieldnames
             print(f"Error: CSV missing required columns: {missing}")
             raise SystemExit(1)
         return [{"filename": r["filename"].strip(), "key": r["key"].strip(), "value": r["value"].strip()} for r in reader]
@@ -103,16 +116,25 @@ async def async_main():
     doc_map = load_documents()
     rows = load_csv(args.csv_path)
 
-    # Validate filenames before opening MCP session
+    # Validate filenames before opening MCP session; skip rows without a matching document
+    # or without a rag_file_name (can't set metadata on un-imported docs)
     errors = []
+    skipped_rows = []
+    valid_rows = []
     for i, row in enumerate(rows, start=2):  # row 1 is header
         if row["filename"] not in doc_map:
             errors.append(f"  Row {i}: filename not found in compliance_documents.json: {row['filename']!r}")
+            skipped_rows.append(row)
+        else:
+            valid_rows.append(row)
     if errors:
-        print("Validation errors (filename not found):")
+        print(f"Warning: Skipped {len(skipped_rows)} rows (document not found or not imported):")
         for e in errors:
             print(e)
-        raise SystemExit(1)
+    rows = valid_rows
+    if not rows:
+        print("No valid rows to process. Exiting.")
+        raise SystemExit(0)
 
     async with get_mcp_session(config) as session:
         # Schema key validation
