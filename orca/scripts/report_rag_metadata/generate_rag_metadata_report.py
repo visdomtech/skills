@@ -14,7 +14,7 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scripts.common.firestore_utils import get_rag_metadata, save_rag_metadata, get_firestore_client
+from scripts.common.firestore_utils import get_rag_metadata, save_rag_metadata, get_firestore_client, batch_get_rag_metadata
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
 from scripts.common.utils import load_documents, load_mcp_config
 
@@ -59,7 +59,7 @@ async def fetch_regulations(session, workspace_id: int) -> list[dict]:
     return regs
 
 
-async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, force_refresh=False, filename_to_regulation=None):
+async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, force_refresh=False, filename_to_regulation=None, cache=None):
     """Fetch metadata for a single document with concurrency control and Firestore caching.
     
     Args:
@@ -70,6 +70,7 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
         firestore_client: Optional Firestore client for caching.
         force_refresh: If True, always fetch from MCP instead of using cache.
         filename_to_regulation: Optional mapping from filename to regulation data.
+        cache: Optional pre-built dict mapping filename -> cached data for fast in-memory lookup.
     """
     global PROGRESS_COUNTER
     rag_name = doc.get("rag_file_name")
@@ -89,27 +90,23 @@ async def fetch_metadata(session, doc, semaphore, total, firestore_client=None, 
             "error": "No rag_file_name"
         }
     else:
-        # Try to get from Firestore cache first (unless force_refresh)
-        if firestore_client and not force_refresh:
-            try:
-                cached = await get_rag_metadata(firestore_client, filename)
-                if cached:
-                    async with PROGRESS_LOCK:
-                        PROGRESS_COUNTER += 1
-                        if PROGRESS_COUNTER % 50 == 0:
-                            print(f"Processed {PROGRESS_COUNTER}/{total} documents...", flush=True)
-                    return {
-                        "filename": cached["filename"],
-                        "rag_file_name": cached["rag_file_name"],
-                        "uploaded": doc.get("uploaded_at", ""),
-                        "regulation_id": reg_data.get("regulation_id", ""),
-                        "created_at": reg_data.get("created_at", ""),
-                        "metadata": cached["metadata"],
-                        "error": cached.get("error"),
-                    }
-            except Exception as e:
-                print(f"  Warning: Firestore cache read failed for {filename}: {e}", flush=True)
-                # Fall through to MCP fetch
+        # Try to get from in-memory cache first (unless force_refresh)
+        if cache and not force_refresh:
+            cached = cache.get(filename)
+            if cached:
+                async with PROGRESS_LOCK:
+                    PROGRESS_COUNTER += 1
+                    if PROGRESS_COUNTER % 50 == 0:
+                        print(f"Processed {PROGRESS_COUNTER}/{total} documents...", flush=True)
+                return {
+                    "filename": cached["filename"],
+                    "rag_file_name": cached["rag_file_name"],
+                    "uploaded": doc.get("uploaded_at", ""),
+                    "regulation_id": reg_data.get("regulation_id", ""),
+                    "created_at": reg_data.get("created_at", ""),
+                    "metadata": cached["metadata"],
+                    "error": cached.get("error"),
+                }
         
         # Fetch from MCP
         async with semaphore:
@@ -392,6 +389,15 @@ async def main():
     if args.force_refresh:
         print("Force refresh mode: ignoring cache", flush=True)
 
+    # Build in-memory cache from Firestore for fast lookups
+    cache = None
+    if firestore_client and not args.force_refresh:
+        try:
+            cache = await batch_get_rag_metadata(firestore_client)
+            print(f"Built in-memory cache for {len(cache)} documents from Firestore", flush=True)
+        except Exception as e:
+            print(f"Warning: Failed to build in-memory cache from Firestore: {e}", flush=True)
+
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     results = []
 
@@ -403,7 +409,7 @@ async def main():
             print(f"Built filename-to-regulation mapping for {len(filename_to_regulation)} files", flush=True)
             
             tasks = [
-                fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh, filename_to_regulation)
+                fetch_metadata(session, doc, semaphore, len(documents), firestore_client, args.force_refresh, filename_to_regulation, cache)
                 for doc in documents
             ]
 

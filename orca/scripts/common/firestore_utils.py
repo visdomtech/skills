@@ -113,6 +113,30 @@ async def get_jurisdiction_codes(client: firestore.AsyncClient) -> Optional[List
     return doc.to_dict().get("codes", [])
 
 
+async def batch_get_rag_metadata(client: firestore.AsyncClient) -> Dict[str, Dict[str, Any]]:
+    """Fetch all cached RAG metadata in one query.
+
+    Returns a dict mapping filename -> cached data for fast in-memory lookups.
+    """
+    cache: Dict[str, Dict[str, Any]] = {}
+    collection = client.collection(RAG_METADATA_COLLECTION)
+    async for doc in collection.stream():
+        data = doc.to_dict()
+        if not data:
+            continue
+        filename = data.get("filename")
+        if filename:
+            cache[filename] = {
+                "filename": data.get("filename", ""),
+                "rag_file_name": data.get("rag_file_name", ""),
+                "metadata": data.get("metadata", []),
+                "document_data": data.get("document_data"),
+                "error": data.get("error"),
+                "cached_at": data.get("cached_at"),
+            }
+    return cache
+
+
 async def clear_cache_for_workspace(
     client: firestore.AsyncClient,
     workspace_id: int,
