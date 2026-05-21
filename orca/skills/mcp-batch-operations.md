@@ -48,20 +48,47 @@ pip install mcp
 
 ---
 
-## Step 1: Generate the Script
+## Step 1: Use Existing Wrapper Scripts (Preferred)
+
+Before generating a new script, check if an existing wrapper in `scripts/common/tools/mcp_<tool_name>.py` already covers your use case. These scripts:
+
+- Accept CSV input and produce CSV output
+- Support `--limit N` to verify with a small subset first
+- Handle all MCP session management via `mcp_wrapper_base.py`
+- Place outputs under `orca/cache/<tool_name>/`
+
+### Example: List jurisdictions with CSV output
+
+```bash
+cd orca
+
+# Verify with one row first
+python scripts/common/tools/mcp_list_jurisdictions.py \
+  --config assets/mcp_config.json \
+  --csv input.csv --limit 1
+
+# Process all rows once verified
+python scripts/common/tools/mcp_list_jurisdictions.py \
+  --config assets/mcp_config.json \
+  --csv input.csv
+```
+
+### Available Wrappers
+
+All generated wrappers are in `scripts/common/tools/` and follow the same pattern:
+- `--config` — Path to MCP config JSON
+- `--csv` — Path to input CSV (headers match tool parameters)
+- `--limit` — Only process the first N rows (for verification)
+
+See each script's `--help` for parameter details and example CSVs.
+
+---
+
+## Step 2: Generate a Custom Script (if no wrapper exists)
 
 When the user provides an MCP server config and describes a batch task, generate a complete Python script using the template from `orca/scripts/mcp_batch_operations/mcp_script_template.py`.
 
-### Required Inputs from User
-
-1. **MCP server config JSON** (transport type, URL, auth headers)
-2. **Task description** (what MCP tools to call, with what arguments)
-3. **Batch size** preference (default: 100)
-4. **Progress file path** (default: `assets/{task_name}_progress.json`)
-
-### Script Structure
-
-The generated script follows this pattern:
+**Note:** The template now imports `get_mcp_session` from `scripts.common.tools.mcp_wrapper_base` instead of defining its own MCP client setup.
 
 ```python
 #!/usr/bin/env python3

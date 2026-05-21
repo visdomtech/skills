@@ -6,6 +6,8 @@ Send an email via the Orca MCP `send_email` tool. Supports plain-text and HTML b
 
 **For emails with file attachments**, always use the helper script `orca/scripts/send_email/send_email.py` — it handles base64-encoding automatically so you never have to encode files manually.
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
 ## Prerequisites
 
 - Access to the Orca MCP server (`send_email` tool)

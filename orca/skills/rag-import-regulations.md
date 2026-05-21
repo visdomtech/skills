@@ -41,6 +41,46 @@ Save as `assets/mcp_config.json`. **Never commit API keys.**
 
 ---
 
+## Pipeline
+
+This skill uses the `rag-import-regulations` script, which internally relies on `scripts/common/tools/mcp_wrapper_base.py` for all MCP communication.
+
+### Step 1: Prepare Environment
+
+```bash
+cd orca
+uv sync
+```
+
+### Step 2: Dry Run with Limited Scope
+
+Always start with a dry run on a small subset to verify the pipeline before processing all rows. Generate the enriched CSV and review it:
+
+```bash
+uv run rag-import-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --dry-run
+```
+
+Review `assets/include_regulations_enriched.csv`. If the data looks correct, proceed. If not, fix any issues and retry.
+
+### Step 3: Full Import (with Confirmation)
+
+After reviewing the enriched CSV, run the actual import:
+
+```bash
+uv run rag-import-regulations \
+  --config assets/mcp_config.json \
+  --corpus-display-name prod-s30-w1-r6-happy-quartz
+```
+
+### Step 4: Verify Output
+
+Review `assets/include_regulations_report.csv` to confirm all imports succeeded.
+
+---
+
 ## Step 2: Generate Enriched CSV (Dry Run)
 
 Always start with a dry run to generate the enriched CSV for review before importing:

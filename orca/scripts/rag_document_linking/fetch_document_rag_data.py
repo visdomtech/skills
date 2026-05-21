@@ -15,12 +15,10 @@ import asyncio
 import json
 import subprocess
 import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
 
 
 ASSETS_DIR = Path("assets")
@@ -31,42 +29,8 @@ DEFAULT_CORPUS_DISPLAY_NAME = "prod-s30-w1-r6-happy-quartz"
 GENERATE_SCRIPT = Path("scripts/rag_document_linking/generate_document_rag_file_report.py")
 
 
-def _parse_content(result):
-    if not result.content:
-        return {}
-    if isinstance(result.content, list):
-        for item in result.content:
-            if hasattr(item, "text"):
-                try:
-                    return json.loads(item.text)
-                except json.JSONDecodeError:
-                    continue
-            elif isinstance(item, dict):
-                return item
-    if isinstance(result.content, dict):
-        return result.content
-    if hasattr(result.content, "text"):
-        try:
-            return json.loads(result.content.text)
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-@asynccontextmanager
-async def get_mcp_session(config):
-    if config.get("type") != "http":
-        raise ValueError(f"Unsupported transport: {config['type']}")
-    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=httpx.Timeout(120.0, connect=30.0))
-    async with client:
-        async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
-
-
 async def fetch_all(config, corpus_display_name):
-    async with get_mcp_session(config) as session:
+    async with get_mcp_session(config, timeout=httpx.Timeout(120.0, connect=30.0)) as session:
         # Step 1: Resolve corpus resource name
         print(f"Fetching corpus list to find '{corpus_display_name}'...")
         result = await session.call_tool("list_corpus", {})

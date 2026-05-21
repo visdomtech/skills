@@ -7,11 +7,9 @@ Replace placeholder values and logic as needed for your specific task.
 import asyncio
 import json
 import os
-from contextlib import asynccontextmanager
 from pathlib import Path
-from mcp import ClientSession
-from mcp.client.sse import sse_client
-# from mcp.client.stdio import stdio_client, StdioServerParameters  # Uncomment for stdio transport
+
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session
 
 # --- Configuration ---
 MCP_CONFIG = {
@@ -40,34 +38,6 @@ def save_progress(state):
     PROGRESS_FILE.write_text(json.dumps(state, indent=2))
 
 
-# --- MCP client setup ---
-@asynccontextmanager
-async def get_mcp_session():
-    """Connect to MCP server based on transport type."""
-    if MCP_CONFIG["type"] == "http":
-        async with sse_client(
-            url=MCP_CONFIG["url"],
-            headers=MCP_CONFIG.get("headers", {}),
-        ) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                yield session
-    elif MCP_CONFIG["type"] == "stdio":
-        from mcp.client.stdio import stdio_client, StdioServerParameters
-        server_params = StdioServerParameters(
-            command="mcp-server",
-            args=[],
-            env=os.environ,
-        )
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                yield session
-    else:
-        raise ValueError(f"Unsupported transport type: {MCP_CONFIG['type']}")
-
-
-# --- Main logic ---
 async def main():
     """Main processing logic. Customize this for your specific task."""
     progress = load_progress()
@@ -75,7 +45,7 @@ async def main():
 
     print(f"Loaded progress: {len(processed_ids)} items already processed")
 
-    async with get_mcp_session() as session:
+    async with get_mcp_session(MCP_CONFIG) as session:
         # Step 1: Fetch data to process
         # TODO: Replace with the appropriate list_tool for your task
         data_result = await session.call_tool(

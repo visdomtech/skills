@@ -10,52 +10,15 @@ import asyncio
 import json
 import subprocess
 import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
 
 
 ASSETS_DIR = Path("assets")
 JURISDICTIONS_FILE = ASSETS_DIR / "jurisdictions.json"
 DEFAULT_OUTPUT = ASSETS_DIR / "jurisdictions_report.html"
 GENERATE_SCRIPT = Path("scripts/report_jurisdictions/generate_jurisdictions_report.py")
-
-
-def _parse_content(result):
-    if not result.content:
-        return {}
-    if isinstance(result.content, list):
-        for item in result.content:
-            if hasattr(item, "text"):
-                try:
-                    return json.loads(item.text)
-                except json.JSONDecodeError:
-                    continue
-            elif isinstance(item, dict):
-                return item
-    if isinstance(result.content, dict):
-        return result.content
-    if hasattr(result.content, "text"):
-        try:
-            return json.loads(result.content.text)
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-@asynccontextmanager
-async def get_mcp_session(config):
-    if config.get("type") != "http":
-        raise ValueError(f"Unsupported transport: {config['type']}")
-    client = httpx.AsyncClient(headers=config.get("headers", {}))
-    async with client:
-        async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
 
 
 async def fetch_jurisdictions(config):

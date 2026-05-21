@@ -4,13 +4,17 @@
 
 This skill describes how to generate a comprehensive HTML report that matches documents in a repository against RAG files in the corresponding corpus. The report identifies unmatched documents, documents with missing `rag_file_name`, correctly matched documents, and documents with incorrect `rag_file_name` values. It also provides guidance on batch-resolving mismatches.
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
 ## Prerequisites
 
 - Access to the Orca MCP server
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - MCP config JSON
 
-## Step 1: Fetch Data
+## Pipeline
+
+### Step 1: Fetch Data
 
 Run the fetch script, which calls all required MCP tools via the MCP SDK and generates the report automatically.
 

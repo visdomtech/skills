@@ -16,15 +16,28 @@ from mcp.client.streamable_http import streamable_http_client
 
 
 @asynccontextmanager
-async def get_mcp_session(config_path: str):
-    """Yield an initialized MCP session via HTTP/SSE."""
-    config_path = Path(config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config not found: {config_path}")
-    config = json.loads(config_path.read_text())
+async def get_mcp_session(config_or_path: str | dict, *, timeout: float | httpx.Timeout | None = None):
+    """Yield an initialized MCP session via HTTP/SSE.
+
+    Args:
+        config_or_path: Path to a JSON config file (str) or a config dict.
+        timeout: Optional timeout. Defaults to 60.0 seconds.
+            Pass an httpx.Timeout instance for fine-grained control.
+    """
+    if isinstance(config_or_path, str):
+        config_path = Path(config_or_path)
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config not found: {config_path}")
+        config = json.loads(config_path.read_text())
+    else:
+        config = config_or_path
+
+    if timeout is None:
+        timeout = 60.0
+
     if config.get("type") != "http":
         raise ValueError(f"Unsupported transport: {config.get('type')}")
-    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=60.0)
+    client = httpx.AsyncClient(headers=config.get("headers", {}), timeout=timeout)
     async with client:
         async with streamable_http_client(
             url=config["url"], http_client=client

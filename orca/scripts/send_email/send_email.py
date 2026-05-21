@@ -30,12 +30,9 @@ import base64
 import json
 import mimetypes
 import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session
 
 
 ASSETS_DIR = Path("assets")
@@ -75,19 +72,6 @@ def build_payload(args: argparse.Namespace) -> dict:
     if args.attach:
         payload["attachments"] = [encode_attachment(a) for a in args.attach]
     return payload
-
-
-@asynccontextmanager
-async def get_mcp_session(config):
-    """Yield an initialized MCP session via HTTP/SSE."""
-    if config.get("type") != "http":
-        raise ValueError(f"Unsupported transport: {config['type']}")
-    client = httpx.AsyncClient(headers=config.get("headers", {}))
-    async with client:
-        async with streamable_http_client(url=config["url"], http_client=client) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
 
 
 async def send_email_async(args: argparse.Namespace) -> None:

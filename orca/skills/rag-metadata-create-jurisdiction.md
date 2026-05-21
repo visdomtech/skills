@@ -4,6 +4,8 @@
 
 Creates `jurisdiction_code` metadata for RAG files by matching included regulations to documents in the Compliance Repository. This enables jurisdiction-based filtering and boosting in RAG search results.
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
 ## Prerequisites
 
 - Orca MCP server access

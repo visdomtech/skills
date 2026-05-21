@@ -4,6 +4,8 @@
 
 Interactively list, add, or delete RAG data schema keys for a Vertex AI RAG corpus. All MCP calls are made via the `rag-schema-manage` Python script using the MCP client SDK — the agent does **not** call MCP tools directly.
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
 - Script: `orca/scripts/rag_schema_manage/manage_rag_data_schemas.py`
 - Entry point: `rag-schema-manage`
 - MCP tools used (by the script): `list_rag_data_schemas`, `create_rag_data_schema`, `delete_rag_data_schema`

@@ -42,6 +42,37 @@ filename,rag_file_name,uploaded,regulation_id,created_at,metadata_key,metadata_v
 Nevada Administrative Code Chapter 686B Insurance.pdf,...,...,...,...,jurisdiction_code,US-NV
 ```
 
+## Pipeline
+
+This skill uses the `rag-metadata-create-from-csv` script, which internally relies on `scripts/common/tools/mcp_wrapper_base.py` for all MCP communication.
+
+### Step 1: Prepare Input CSV
+
+Create a CSV file with `filename,key,value` columns.
+
+### Step 2: Verify with One Row
+
+Always verify the pipeline with a single row first using `--limit 1`:
+
+```bash
+cd orca
+uv run rag-metadata-create-from-csv --config assets/mcp_config.json --csv input.csv --limit 1
+```
+
+If the output shows the expected result (e.g., metadata created/updated successfully), proceed to Step 3. If not, fix the CSV or configuration and retry with `--limit 1`.
+
+### Step 3: Process All Rows
+
+Once verified, process the full CSV:
+
+```bash
+uv run rag-metadata-create-from-csv --config assets/mcp_config.json --csv input.csv
+```
+
+### Step 4: Verify Output
+
+Spot-check a few documents using the `mcp_list_rag_metadata.py` wrapper to confirm the metadata was written correctly.
+
 ## Usage
 
 ```bash

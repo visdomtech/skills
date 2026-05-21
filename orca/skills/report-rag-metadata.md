@@ -15,7 +15,9 @@ This skill describes how to generate a comprehensive report on the jurisdiction 
 - **Optional**: Google Cloud credentials configured for Firestore access (for caching).
 - Workspace ID: 1, Repository ID: 6.
 
-## Step 1: Prepare Documents Data
+## Pipeline
+
+### Step 1: Prepare Documents Data
 
 Before running the report, ensure the documents cache is up-to-date:
 
@@ -26,16 +28,14 @@ uv run fetch-compliance-documents --config assets/mcp_config.json
 
 This generates `assets/compliance_documents.json`, which is required by the report script.
 
-## Step 2: Prepare Environment
-
-Before running the script, ensure your virtual environment is set up and dependencies are installed:
+### Step 2: Prepare Environment
 
 ```bash
 cd orca
 uv sync
 ```
 
-## Step 2: Run the Script
+### Step 3: Run the Report
 
 Execute the generation script using your MCP configuration:
 

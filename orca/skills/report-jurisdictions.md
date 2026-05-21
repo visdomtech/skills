@@ -4,13 +4,17 @@
 
 This skill describes how to generate a comprehensive HTML report from Orca jurisdictions data. The report includes counts by jurisdiction level (federal, state, city) and identifies invalid, useless, or meaningless jurisdiction entries.
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
 ## Prerequisites
 
 - Access to the Orca MCP server
 - `uv` for Python environment management (dependencies managed via `orca/pyproject.toml`)
 - MCP config JSON (see Step 1)
 
-## Step 1: Prepare Environment and Run Script
+## Pipeline
+
+### Step 1: Prepare Environment and Run Script
 
 Set up the Python environment and run the fetch script, which calls `list_jurisdictions` via the MCP SDK and generates the report automatically.
 

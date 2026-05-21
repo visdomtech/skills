@@ -4,6 +4,10 @@
 
 Reliably set or update a single metadata entry for a given RAG file using the Orca MCP tools. This skill implements a "check-then-act" pattern with verification to ensure data consistency and handle potential API inconsistencies (such as false-negative errors).
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
+- Tools used: `list_rag_metadata`, `create_rag_metadata`, `update_rag_metadata`
+
 ## Prerequisites
 
 - Access to the Orca MCP server

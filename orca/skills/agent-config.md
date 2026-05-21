@@ -5,6 +5,8 @@
 This skill describes how to read and write the runtime configuration (`AgentConfig`) for agents
 in the **orcaagents** service using the Orca MCP tools `get_agent_config` and `set_agent_config`.
 
+All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
+
 Config changes are persisted to Firestore immediately and take effect on the next agent request.
 
 ## Prerequisites
