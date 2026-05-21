@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
+from scripts.common.utils import load_mcp_config
 
 
 ASSETS_DIR = Path("assets")
@@ -37,13 +38,8 @@ async def async_main():
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Output HTML file path")
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: Config not found: {config_path}")
-        raise SystemExit(1)
-
-    config = json.loads(config_path.read_text())
-    print(f"Config loaded from {config_path} (URL: {config.get('url')})")
+    config = load_mcp_config(args.config)
+    print(f"Config loaded (URL: {config.get('url')})")
 
     jurisdictions = await fetch_jurisdictions(config)
     if not jurisdictions:

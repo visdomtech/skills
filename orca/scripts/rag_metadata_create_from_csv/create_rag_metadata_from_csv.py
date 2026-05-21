@@ -20,27 +20,13 @@ if the metadata appears after the error.
 import argparse
 import asyncio
 import csv
-import json
 from pathlib import Path
 
-from scripts.common.rag_metadata import _parse_content, get_mcp_session, upsert_rag_metadata
+from scripts.common.rag_metadata import upsert_rag_metadata
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
+from scripts.common.utils import load_documents, load_mcp_config
 
-DOCUMENTS_FILE = Path("assets/compliance_documents.json")
 CONCURRENCY_LIMIT = 3
-
-
-def load_documents():
-    """Return a {filename: rag_file_name} mapping from the cached JSON."""
-    if not DOCUMENTS_FILE.exists():
-        print(f"Error: {DOCUMENTS_FILE} not found. Run fetch-compliance-documents first.")
-        raise SystemExit(1)
-    with open(DOCUMENTS_FILE) as f:
-        data = json.load(f)
-    if "response" in data and "data" in data["response"]:
-        docs = data["response"]["data"].get("documents", [])
-    else:
-        docs = data.get("documents", [])
-    return {d["filename"]: d["rag_file_name"] for d in docs if d.get("rag_file_name")}
 
 
 def load_csv(csv_path):
@@ -107,13 +93,9 @@ async def async_main():
                         help="Skip key validation against list_rag_data_schemas")
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: config not found: {config_path}")
-        raise SystemExit(1)
-    config = json.loads(config_path.read_text())
+    config = load_mcp_config(args.config)
 
-    doc_map = load_documents()
+    doc_map = {d["filename"]: d["rag_file_name"] for d in load_documents() if d.get("rag_file_name")}
     rows = load_csv(args.csv_path)
 
     # Validate filenames before opening MCP session; skip rows without a matching document

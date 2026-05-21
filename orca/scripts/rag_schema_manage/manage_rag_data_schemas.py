@@ -17,7 +17,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from scripts.common.rag_metadata import _parse_content, get_mcp_session
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
+from scripts.common.utils import load_mcp_config
 
 VALID_DATA_TYPES = {"INTEGER", "FLOAT", "STRING", "DATETIME", "BOOLEAN"}
 PROTECTED_KEYS = {"jurisdiction_code"}
@@ -134,11 +135,7 @@ async def async_main():
                         help="Required for delete action to confirm irreversible deletion")
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: config not found: {config_path}")
-        raise SystemExit(1)
-    config = json.loads(config_path.read_text())
+    config = load_mcp_config(args.config)
 
     if args.action in ("add", "delete") and not args.key:
         print(f"Error: --key is required for --action {args.action}")

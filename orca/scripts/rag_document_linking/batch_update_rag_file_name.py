@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
+from scripts.common.utils import load_mcp_config
 
 
 BATCH_SIZE = 200
@@ -70,18 +71,13 @@ async def _async_main():
                         help="Workspace ID (optional, will prompt if not provided)")
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: Config not found: {config_path}")
-        raise SystemExit(1)
-
     csv_path = Path(args.csv)
     if not csv_path.exists():
         print(f"Error: CSV not found: {csv_path}")
         raise SystemExit(1)
 
-    config = json.loads(config_path.read_text())
-    print(f"Config loaded from {config_path} (URL: {config.get('url')})")
+    config = load_mcp_config(args.config)
+    print(f"Config loaded (URL: {config.get('url')})")
 
     entries = load_csv(csv_path)
     if not entries:

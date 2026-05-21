@@ -33,6 +33,7 @@ import sys
 from pathlib import Path
 
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session
+from scripts.common.utils import load_mcp_config
 
 
 ASSETS_DIR = Path("assets")
@@ -75,12 +76,7 @@ def build_payload(args: argparse.Namespace) -> dict:
 
 
 async def send_email_async(args: argparse.Namespace) -> None:
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: Config not found: {config_path}", file=sys.stderr)
-        sys.exit(1)
-
-    config = json.loads(config_path.read_text())
+    config = load_mcp_config(args.config)
     payload = build_payload(args)
 
     print(f"Sending email to {', '.join(args.to)}...")

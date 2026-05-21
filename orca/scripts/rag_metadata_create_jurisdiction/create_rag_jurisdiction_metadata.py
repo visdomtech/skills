@@ -15,7 +15,9 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scripts.common.rag_metadata import _parse_content, get_mcp_session, upsert_rag_metadata
+from scripts.common.rag_metadata import upsert_rag_metadata
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
+from scripts.common.utils import load_mcp_config
 from scripts.common.firestore_utils import get_firestore_client
 
 
@@ -184,13 +186,8 @@ async def async_main():
     args = parser.parse_args()
     print(f"Arguments parsed: {args}", flush=True)
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: Config not found: {config_path}")
-        raise SystemExit(1)
-
-    config = json.loads(config_path.read_text())
-    print(f"Config loaded from {config_path} (URL: {config.get('url')})", flush=True)
+    config = load_mcp_config(args.config)
+    print(f"Config loaded (URL: {config.get('url')})", flush=True)
 
     print("Initializing MCP session...", flush=True)
     firestore_client = get_firestore_client()

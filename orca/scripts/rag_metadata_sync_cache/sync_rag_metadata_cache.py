@@ -10,30 +10,13 @@ Usage:
 
 import argparse
 import asyncio
-import json
-from pathlib import Path
 
 from scripts.common.firestore_utils import (
     get_firestore_client,
     get_rag_metadata,
     save_rag_metadata,
 )
-
-
-def load_documents():
-    """Load documents from the cached JSON file to find rag_file_name."""
-    documents_file = Path("assets/compliance_documents.json")
-    if not documents_file.exists():
-        print(f"Error: Documents file not found at {documents_file}")
-        raise SystemExit(1)
-
-    with open(documents_file, "r") as f:
-        data = json.load(f)
-
-    # Handle cache wrapper format
-    if "response" in data and "data" in data["response"]:
-        return data["response"]["data"].get("documents", [])
-    return data.get("documents", [])
+from scripts.common.utils import load_documents, load_mcp_config
 
 
 async def sync_cache(filename, key, new_value):
@@ -87,10 +70,7 @@ async def main():
     parser.add_argument("--value", required=True, help="New value for the metadata key")
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: Config not found: {config_path}")
-        raise SystemExit(1)
+    load_mcp_config(args.config)
 
     await sync_cache(args.filename, args.key, args.value)
 

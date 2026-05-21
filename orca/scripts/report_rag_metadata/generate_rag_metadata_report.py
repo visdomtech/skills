@@ -11,12 +11,12 @@ Uses Firestore cache to avoid expensive individual API calls when data is alread
 import argparse
 import asyncio
 import csv
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from scripts.common.firestore_utils import get_rag_metadata, save_rag_metadata, get_firestore_client
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
+from scripts.common.utils import load_documents, load_mcp_config
 
 # Configuration
 WORKSPACE_ID = 1
@@ -27,21 +27,6 @@ HTML_OUTPUT = Path("assets/rag_metadata_summary.html")
 CONCURRENCY_LIMIT = 3
 PROGRESS_LOCK = asyncio.Lock()
 PROGRESS_COUNTER = 0
-
-
-def load_documents():
-    """Load documents from the cached JSON file."""
-    if not DOCUMENTS_FILE.exists():
-        print(f"Error: Documents file not found at {DOCUMENTS_FILE}")
-        raise SystemExit(1)
-    
-    with open(DOCUMENTS_FILE, "r") as f:
-        data = json.load(f)
-    
-    # Handle cache wrapper format
-    if "response" in data and "data" in data["response"]:
-        return data["response"]["data"].get("documents", [])
-    return data.get("documents", [])
 
 
 def build_filename_to_regulation(regulations: list[dict]) -> dict[str, dict]:
@@ -393,13 +378,8 @@ async def main():
     parser.add_argument("--force-refresh", action="store_true", help="Force refresh from MCP, ignore cache")
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"Error: Config not found: {config_path}")
-        raise SystemExit(1)
-
-    config = json.loads(config_path.read_text())
-    print(f"Config loaded from {config_path}", flush=True)
+    config = load_mcp_config(args.config)
+    print(f"Config loaded (URL: {config.get('url')})", flush=True)
 
     documents = load_documents()
     print(f"Loaded {len(documents)} documents", flush=True)
