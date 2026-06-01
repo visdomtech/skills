@@ -1,7 +1,4 @@
 {
   "type": "http",
-  "url": "https://orcaservices-360095844563.us-central1.run.app",
-  "headers": {
-    "X-API-KEY": "3c5a69d331b5bccc4435c9d3c73734011ea8efe700a1a2f0df12caad662f8ef7"
-  }
+  "url": "http://127.0.0.1:8080/orcaagents/mcp"
 }
