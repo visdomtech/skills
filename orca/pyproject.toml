@@ -23,6 +23,7 @@ rag-metadata-sync-cache = "scripts.rag_metadata_sync_cache.sync_rag_metadata_cac
 rag-metadata-create-from-csv = "scripts.rag_metadata_create_from_csv.create_rag_metadata_from_csv:main"
 rag-schema-manage = "scripts.rag_schema_manage.manage_rag_data_schemas:main"
 rag-import-regulations = "scripts.rag_import_regulations.include_regulations:main"
+regulation-list-fetch = "scripts.regulation_list.fetch_regulations:main"
 
 [tool.uv]
 default-groups = "all"

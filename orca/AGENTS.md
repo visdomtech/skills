@@ -29,15 +29,9 @@ Before calling any MCP tool directly, **always check `orca/skills/` for an exist
 | Create RAG jurisdiction metadata for included regulations | `orca/skills/create_rag_jurisdiction_metadata.md` |
 | Batch process MCP tools via Python script (saves tokens) | `orca/skills/mcp_script_runner.md` |
 | Manage RAG data schemas (list, add, delete) | `orca/skills/manage_rag_data_schemas.md` |
+| List and summarize regulations by workspace | `orca/skills/regulation-list.md` |
 
 ---
-
-## MUST NOT: Call MCP Tools Inline
-
-**The agent must NOT call Orca MCP tools directly through its native tool-call capability.** Always run the appropriate script via the MCP client SDK instead.
-
-This ensures consistent error handling, clear audit trails in script output, and alignment with the established workflow pattern across all skills.
-
 ### Why Scripts Over Inline Calls?
 
 - **Error handling**: Scripts handle `INTERNAL` errors and re-verification consistently
