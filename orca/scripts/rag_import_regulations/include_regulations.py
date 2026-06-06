@@ -855,7 +855,6 @@ async def async_main():
     parser.add_argument("--workspace-id", type=int, default=None, help="Workspace ID (optional, auto-detected by default)")
     parser.add_argument("--repository-id", type=int, default=None, help="Repository ID (optional, auto-detected by default)")
     parser.add_argument("--dry-run", action="store_true", help="Analyze only; generate enriched CSV and exit without importing")
-    parser.add_argument("--reset-progress", action="store_true", help="Clear progress file and start fresh")
     parser.add_argument("--since-date", type=_parse_iso_date, default=None, help="Only process regulations created on or after this date (YYYY-MM-DD)")
     parser.add_argument("--until-date", type=_parse_iso_date, default=None, help="Only process regulations created on or before this date (YYYY-MM-DD)")
     parser.add_argument("--regulation-ids-file", type=Path, default=None, help="Path to a file containing regulation IDs to process (one per line)")
@@ -866,9 +865,8 @@ async def async_main():
     config = load_mcp_config(args.config)
     print(f"Config loaded (URL: {config.get('url')})")
 
-    if args.reset_progress:
-        reset_progress()
-        print("Progress reset")
+    reset_progress()
+    print("Progress reset (starting fresh)")
 
     progress = load_progress()
 

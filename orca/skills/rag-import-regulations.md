@@ -263,31 +263,7 @@ uv run rag-import-regulations \
 
 ---
 
-## Step 4: Resume After Interruption
 
-If the script is interrupted (Ctrl+C, network timeout, etc.), simply re-run the same command. It will:
-- Skip GCS checks for URIs already imported
-- Skip `set_rag_file_name` for document IDs already updated
-- Skip `update_document_status` for document IDs already indexed
-
-```bash
-uv run rag-import-regulations \
-  --config assets/mcp_config.json \
-  --corpus-display-name prod-s30-w1-r6-happy-quartz
-```
-
-Progress is tracked in `assets/include_regulations_progress.json`.
-
-To start completely fresh (ignore prior progress):
-
-```bash
-uv run rag-import-regulations \
-  --config assets/mcp_config.json \
-  --corpus-display-name prod-s30-w1-r6-happy-quartz \
-  --reset-progress
-```
-
----
 
 ## Step 5: Verify Results
 
@@ -353,7 +329,7 @@ Common error values:
 2. **Always dry-run first** to generate the enriched CSV and understand the scope before mutating data
 3. **rag_file_name is the gate** — Documents with existing `rag_file_name` are skipped; only empty ones are imported
 4. **Confirmation prompt** — The script asks before importing unless you pass `--yes`
-5. **Resume is safe** — re-running the same command picks up where it left off
+5. **Progress is always reset** — each run starts fresh with a clean state
 6. **GCS existence is checked automatically** before every import (no flag needed)
 7. **Batch sizes are tuned** — 100 for import, 200 for updates, matching existing script patterns
 8. **Three CSVs are generated** — The focused CSV (only rows needing import), the enriched CSV (all rows for deep review), and the operation report CSV (for post-import results)
