@@ -354,7 +354,7 @@ async def check_gcs_existence(session, candidates: list[Candidate]) -> list[Cand
 
     for i in range(0, len(to_check), BATCH_SIZE_GCS_CHECK):
         batch = to_check[i : i + BATCH_SIZE_GCS_CHECK]
-        uris = [c.gs_uri for c in batch]
+        uris = [_full_gs_uri(c.gs_uri) for c in batch]
         print(f"  Batch {i // BATCH_SIZE_GCS_CHECK + 1}: {len(batch)} URIs")
 
         try:
@@ -371,13 +371,15 @@ async def check_gcs_existence(session, candidates: list[Candidate]) -> list[Cand
                     c.gcs_exists = False
                     c.error = "GCS URI does not exist"
                 else:
-                    # Ambiguous result — assume exists to let import handle it
-                    c.gcs_exists = True
+                    # Ambiguous result — default to False for safety
+                    c.gcs_exists = False
+                    c.error = "GCS existence check returned ambiguous result"
         except Exception as e:
             print(f"  Warning: GCS check failed for batch: {e}")
-            # Assume all exist to let import handle errors
+            # Default to False for safety
             for c in batch:
-                c.gcs_exists = True
+                c.gcs_exists = False
+                c.error = f"GCS existence check failed: {e}"
 
     exists_count = sum(1 for c in candidates if c.gcs_exists is True)
     missing_count = sum(1 for c in candidates if c.gcs_exists is False)
