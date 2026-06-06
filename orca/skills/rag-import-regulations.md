@@ -63,7 +63,11 @@ uv run rag-import-regulations \
   --dry-run
 ```
 
-Review `assets/include_regulations_enriched.csv`. If the data looks correct, proceed. If not, fix any issues and retry.
+Review both CSVs:
+- **`assets/include_regulations_to_import.csv`** — start here; it shows only the rows that will be imported (empty `rag_file_name`)
+- `assets/include_regulations_enriched.csv` — full dataset for deep inspection if needed
+
+If the data looks correct, proceed. If not, fix any issues and retry.
 
 ### Step 3: Full Import (with Confirmation)
 
@@ -100,12 +104,27 @@ The dry run:
 2. Fetches all documents in the matching repository (`list_documents`)
 3. Matches regulations to documents by filename
 4. Checks GCS existence for all candidate URIs (`check_gcs_existence`)
-5. Generates `assets/include_regulations_enriched.csv` with full regulation + document data
+5. Generates two CSVs for review:
+   - `assets/include_regulations_enriched.csv` — full regulation + document data (all rows)
+   - `assets/include_regulations_to_import.csv` — **focused view with only the rows that need importing**
 6. Prints a **Pre-Import Summary** showing how many need import
 
 > **Note:** Dry-run does **not** create missing documents or import anything. The full import (Step 3) will automatically call `create_document` for any missing files before proceeding.
 
-**Review the enriched CSV before proceeding.** It contains columns:
+**Review the focused CSV first.** `include_regulations_to_import.csv` contains only the rows that need importing:
+
+| Column | Meaning |
+|--------|---------|
+| `regulation_id` | Regulation ID |
+| `short_title` | Short title of the regulation |
+| `jurisdiction_code` | Jurisdiction code (e.g., `US-FL`) |
+| `filename` | Document filename |
+| `document_id` | Document ID in the repository |
+| `gs_uri` | GCS URI of the document |
+| `gcs_exists` | `yes` if the GCS URI was verified to exist |
+| `error` | Any error message (e.g., missing document, missing GCS) |
+
+The enriched CSV (`include_regulations_enriched.csv`) contains all rows with these columns:
 - `regulation_id`, `short_title`, `official_title`, `jurisdiction_code`
 - `category`, `status`, `created_at`, `effective_date`, `statute_code`
 - `filenames`, `document_id`, `upload_date`, `gs_uri`, `document_status`
@@ -330,12 +349,12 @@ Common error values:
 
 ## Key Takeaways
 
-1. **3-step workflow** — Generate enriched CSV → Review & confirm → Process import
+1. **3-step workflow** — Generate CSVs → Review focused CSV → Confirm → Process import
 2. **Always dry-run first** to generate the enriched CSV and understand the scope before mutating data
 3. **rag_file_name is the gate** — Documents with existing `rag_file_name` are skipped; only empty ones are imported
 4. **Confirmation prompt** — The script asks before importing unless you pass `--yes`
 5. **Resume is safe** — re-running the same command picks up where it left off
 6. **GCS existence is checked automatically** before every import (no flag needed)
 7. **Batch sizes are tuned** — 100 for import, 200 for updates, matching existing script patterns
-8. **Two CSVs are generated** — The enriched CSV (for pre-import review) and the operation report CSV (for post-import results)
+8. **Three CSVs are generated** — The focused CSV (only rows needing import), the enriched CSV (all rows for deep review), and the operation report CSV (for post-import results)
 9. **Batch filtering is available** — use `--since-date`, `--until-date`, or `--regulation-ids-file` to target specific regulation batches instead of processing everything at once

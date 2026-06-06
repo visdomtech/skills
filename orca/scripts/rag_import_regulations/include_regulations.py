@@ -62,6 +62,7 @@ def _load_regulation_ids(path: Path) -> set[int]:
 DEFAULT_CORPUS_DISPLAY_NAME = "prod-s30-w1-r6-happy-quartz"
 PROGRESS_FILE = Path("assets/include_regulations_progress.json")
 REPORT_CSV = Path("assets/include_regulations_report.csv")
+IMPORT_CANDIDATES_CSV = Path("assets/include_regulations_to_import.csv")
 BATCH_SIZE_IMPORT = 25
 BATCH_SIZE_UPDATE = 200
 BATCH_SIZE_GCS_CHECK = 100
@@ -421,6 +422,7 @@ async def _import_batch(session, corpus_name: str, batch: list[Candidate]) -> tu
                 await asyncio.sleep(POLL_INTERVAL)
                 poll_result = await session.call_tool("get_import_rag_files_result", {})
                 poll_content = _parse_content(poll_result)
+                print(f"    Poll status: {poll_content}")
                 done = poll_content.get("done", poll_content.get("complete", False))
                 if done:
                     failed = poll_content.get("failed", 0)
@@ -729,6 +731,40 @@ def generate_enriched_csv(
     print(f"Enriched report saved to {output_path}")
 
 
+def generate_import_candidates_csv(
+    candidates: list[Candidate],
+    output_path: Path = IMPORT_CANDIDATES_CSV,
+) -> None:
+    """Write a focused CSV containing only candidates that need importing.
+
+    Filters to candidates with empty rag_file_name, meaning they have not
+    yet been imported into the RAG corpus.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    need_import = [c for c in candidates if not c.already_imported]
+
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "regulation_id", "short_title", "jurisdiction_code",
+            "filename", "document_id", "gs_uri", "gcs_exists", "error",
+        ])
+        for c in need_import:
+            writer.writerow([
+                c.regulation_id,
+                c.regulation_short_title,
+                c.jurisdiction_code,
+                c.filename,
+                c.document_id if c.document_id != -1 else "",
+                c.gs_uri,
+                "yes" if c.gcs_exists else "no",
+                c.error,
+            ])
+
+    print(f"Import candidates report saved to {output_path} ({len(need_import)} rows)")
+
+
 def generate_csv_report(candidates: list[Candidate], output_path: Path) -> None:
     """Write a CSV report of the import operation results."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -925,6 +961,9 @@ async def async_main():
 
         # Step 1: Generate enriched CSV for review
         generate_enriched_csv(regulations, documents, candidates, args.report_path, workspace_id, repository_id)
+
+        # Step 1b: Generate focused CSV with only candidates needing import
+        generate_import_candidates_csv(candidates)
 
         # Step 2: Print summary and ask for confirmation
         has_work = print_pre_import_summary(candidates)
