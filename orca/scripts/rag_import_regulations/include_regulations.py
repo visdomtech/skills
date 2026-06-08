@@ -861,7 +861,7 @@ async def async_main():
     parser.add_argument("--until-date", type=_parse_iso_date, default=None, help="Only process regulations created on or before this date (YYYY-MM-DD)")
     parser.add_argument("--regulation-ids-file", type=Path, default=None, help="Path to a file containing regulation IDs to process (one per line)")
     parser.add_argument("--report-path", type=Path, default=Path("assets/include_regulations_enriched.csv"), help="Path for the enriched CSV report (default: assets/include_regulations_enriched.csv)")
-    parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt and proceed with import")
+    parser.add_argument("--yes", action="store_true", help="Skip the interactive confirmation prompt and proceed with import (used by agents after getting user approval)")
     args = parser.parse_args()
 
     config = load_mcp_config(args.config)
@@ -977,7 +977,7 @@ async def async_main():
 
         if not args.yes:
             try:
-                response = input("\nProceed with importing? [y/N]: ").strip().lower()
+                response = input("\nProceed with importing? [y/N] (or use --yes to skip this prompt): ").strip().lower()
             except (EOFError, OSError):
                 print("Non-interactive mode detected. Use --yes to skip confirmation.")
                 raise SystemExit(1)

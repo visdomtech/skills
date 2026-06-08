@@ -5,8 +5,8 @@
 Bulk-import documents for regulations into the Vertex AI RAG corpus. This skill follows a clear 3-step workflow:
 
 1. **Generate enriched CSV** — Fetches all regulations, matches them to documents, and writes an enriched CSV for review
-2. **Review & confirm** — Review the CSV summary showing which documents need import (empty `rag_file_name`), then confirm before proceeding
-3. **Process import** — Imports all documents with missing/empty `rag_file_name` into RAG, links them with `set_rag_file_name`, and updates status to `INDEXED`
+2. **Review & confirm** — Review the CSV summary showing which documents need import (empty `rag_file_name`). The agent asks for confirmation before proceeding
+3. **Process import** — After user confirmation, the agent runs the import script with `--yes` to import all documents with missing/empty `rag_file_name` into RAG, link them with `set_rag_file_name`, and update status to `INDEXED`
 
 The script uses the document's **`rag_file_name`** as the source of truth for whether import is needed. Missing document records are **auto-created** via `create_document` when needed.
 
@@ -144,12 +144,13 @@ uv run rag-import-regulations \
 
 ## Step 3: Run Full Import (with Confirmation)
 
-After reviewing the enriched CSV, run the actual import:
+After reviewing the enriched CSV, the agent asks for confirmation before proceeding. Once confirmed, the agent runs the import with `--yes` to avoid an interactive prompt:
 
 ```bash
 uv run rag-import-regulations \
   --config assets/mcp_config.json \
-  --corpus-display-name prod-s30-w1-r6-happy-quartz
+  --corpus-display-name prod-s30-w1-r6-happy-quartz \
+  --yes
 ```
 
 The script performs the following workflow:
@@ -159,22 +160,14 @@ The script performs the following workflow:
 3. **Match** — Links regulations to documents via the `filenames` array
 4. **Generate enriched CSV** — Writes `assets/include_regulations_enriched.csv` for review
 5. **Pre-import summary** — Shows how many documents already have `rag_file_name` vs. need import
-6. **Confirmation prompt** — Asks "Proceed with importing? [y/N]" before mutating data
-7. **Create missing** — For any regulation whose filename has no matching document, calls `create_document` to add the missing record, then re-fetches and re-matches
-8. **GCS check** — Verifies all candidate GCS URIs exist before importing
-9. **Import** — Calls `import_rag_files` and polls `get_import_rag_files_result` until complete
-10. **Link** — Calls `set_rag_file_name` in batches of 200 to link documents to RAG files
-11. **Status update** — Calls `update_document_status` with `"INDEXED"` in batches of 200
-12. **Report** — Generates `assets/include_regulations_report.csv` with operation results
+6. **Create missing** — For any regulation whose filename has no matching document, calls `create_document` to add the missing record, then re-fetches and re-matches
+7. **GCS check** — Verifies all candidate GCS URIs exist before importing
+8. **Import** — Calls `import_rag_files` and polls `get_import_rag_files_result` until complete
+9. **Link** — Calls `set_rag_file_name` in batches of 200 to link documents to RAG files
+10. **Status update** — Calls `update_document_status` with `"INDEXED"` in batches of 200
+11. **Report** — Generates `assets/include_regulations_report.csv` with operation results
 
-**Skip confirmation** with `--yes` (useful for CI/CD or non-interactive environments):
-
-```bash
-uv run rag-import-regulations \
-  --config assets/mcp_config.json \
-  --corpus-display-name prod-s30-w1-r6-happy-quartz \
-  --yes
-```
+> **Note:** The `--yes` flag skips the interactive confirmation prompt. When this skill is invoked, the agent handles confirmation **before** executing the script, so `--yes` is always passed after user approval.
 
 **Auto-detection behavior:** The script resolves `workspace_id` and `repository_id` automatically from the corpus display name. You can override with explicit flags:
 
@@ -325,10 +318,10 @@ Common error values:
 
 ## Key Takeaways
 
-1. **3-step workflow** — Generate CSVs → Review focused CSV → Confirm → Process import
+1. **3-step workflow** — Generate CSVs → Review focused CSV → Agent asks for confirmation → Process import with `--yes`
 2. **Always dry-run first** to generate the enriched CSV and understand the scope before mutating data
 3. **rag_file_name is the gate** — Documents with existing `rag_file_name` are skipped; only empty ones are imported
-4. **Confirmation prompt** — The script asks before importing unless you pass `--yes`
+4. **Agent handles confirmation** — The agent reviews the summary and asks the user for approval before running the script with `--yes`
 5. **Progress is always reset** — each run starts fresh with a clean state
 6. **GCS existence is checked automatically** before every import (no flag needed)
 7. **Batch sizes are tuned** — 100 for import, 200 for updates, matching existing script patterns
