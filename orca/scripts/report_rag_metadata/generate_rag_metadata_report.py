@@ -233,9 +233,11 @@ def generate_html(results):
         metadata_list = res.get("metadata") or []
         for entry in metadata_list:
             if entry.get("key") == "jurisdiction_code":
-                val = entry.get("value", "Unknown")
-                jurisdiction_counts[val] = jurisdiction_counts.get(val, 0) + 1
-                has_jurisdiction = True
+                val = entry.get("value")
+                # Treat literal "null" string as missing jurisdiction
+                if val and val != "null":
+                    jurisdiction_counts[val] = jurisdiction_counts.get(val, 0) + 1
+                    has_jurisdiction = True
                 break
         
         if has_jurisdiction:
