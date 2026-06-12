@@ -210,6 +210,60 @@ uv run rag-document-fetch-data \
 
 ---
 
+## Step 4c: Import a Single Document
+
+When you need to import **just one specific unmatched document** instead of all unmatched documents, use the dedicated single-document import script at `scripts/rag_document_linking/import_single_document.py`.
+
+### When to Use
+
+- Only one or a few documents need to be imported
+- You want to avoid the bulk `--import-unmatched` flow
+- A previously imported document's RAG file is missing from the corpus and needs to be re-imported
+
+### Usage
+
+```bash
+# From the orca/ directory
+uv run python3 scripts/rag_document_linking/import_single_document.py \
+  --config assets/mcp_config.json \
+  --document-id <document_id> \
+  --filename "<filename>" \
+  --gs-uri "<gs_uri>" \
+  [--workspace-id <id>] \
+  [--corpus-display-name <name>]
+```
+
+**Parameters:**
+- `--config` (required): Path to MCP config JSON
+- `--document-id` (required): The document ID from the repository
+- `--filename` (required): The document filename (must match `document.filename`)
+- `--gs-uri` (required): The GCS URI of the document (e.g., `regulations/1/filename.pdf`)
+- `--workspace-id` (optional): Workspace ID. Default: `1`
+- `--corpus-display-name` (optional): Corpus display name. Default: `prod-s30-w1-r6-happy-quartz`
+
+### Example
+
+```bash
+uv run python3 scripts/rag_document_linking/import_single_document.py \
+  --config assets/mcp_config.json \
+  --document-id 2678 \
+  --filename "Columbus - 0709 - 2023.pdf" \
+  --gs-uri "regulations/1/Columbus - 0709 - 2023.pdf" \
+  --workspace-id 1
+```
+
+**What happens:**
+1. Resolves the corpus by display name via `list_corpus`
+2. Verifies the document's GCS URI exists via `check_gcs_existence`
+3. Imports the document into the RAG corpus via `import_rag_files`
+4. Links the `rag_file_name` via `set_rag_file_name`
+5. Sets document status to `INDEXED` via `update_document_status`
+6. Prints a summary of the import result
+
+**Note:** If an import is already running on the target corpus, the script will fail with `import already running`. Wait for the existing import to complete and retry.
+
+---
+
 ## Step 5: Verification
 
 After completing the batch updates, verify that all `rag_file_name` values were properly set.
@@ -309,3 +363,4 @@ open assets/document_rag_file_report_verification.html
 6. Save all MCP tool responses in `assets/` to facilitate reuse and avoid redundant API calls.
 7. **Unmatched documents** (no RAG file in corpus) can be imported via `--import-unmatched`, which reuses the same pipeline as `rag-import-regulations` — GCS check, import, link, and status update.
 8. The `--yes` flag skips interactive confirmation for both unmatched import and batch updates when running non-interactively.
+9. **Single-document import**: Use `scripts/rag_document_linking/import_single_document.py` to import one document at a time when the bulk flow is not needed.

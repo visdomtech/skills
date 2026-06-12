@@ -136,6 +136,10 @@ async def fetch_all(config, corpus_display_name):
         result = await session.call_tool("list_rag_files", {"corpusName": corpus_name})
         rag_content = _parse_content(result)
         rag_files = rag_content.get("files", rag_content.get("ragFiles", []))
+        if not rag_files:
+            print(f"Error: list_rag_files returned 0 files for corpus '{corpus_name}'.")
+            print("This is likely a transient API issue. Please re-run the command.")
+            raise SystemExit(1)
         print(f"Fetched {len(rag_files)} RAG files")
 
         # Step 3: Find workspace and repository matching the corpus
