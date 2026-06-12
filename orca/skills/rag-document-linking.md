@@ -165,6 +165,51 @@ The skill provides a dedicated script `scripts/rag_document_linking/batch_update
 
 ---
 
+## Step 4b: Import Unmatched Documents
+
+The report also identifies **unmatched documents** — documents that exist in the repository but have no corresponding RAG file in the corpus. These documents were never imported into RAG and need the full import pipeline (GCS verification, `import_rag_files`, `set_rag_file_name`, and `update_document_status`).
+
+### When to Use
+
+- The report shows non-zero "Unmatched" count
+- Documents were added to the repository but not yet imported into the RAG corpus
+- You want to ensure every repository document is searchable in RAG
+
+### Import Unmatched Workflow
+
+The fetch script (`rag-document-fetch-data`) has a built-in `--import-unmatched` flag that reuses the same import pipeline as `rag-import-regulations`:
+
+```bash
+# Preview unmatched documents (already shown in the report output)
+uv run rag-document-fetch-data --config assets/mcp_config.json
+
+# Import unmatched documents into RAG (with confirmation prompt)
+uv run rag-document-fetch-data \
+  --config assets/mcp_config.json \
+  --import-unmatched
+
+# Import with --yes to skip confirmation (after user approval)
+uv run rag-document-fetch-data \
+  --config assets/mcp_config.json \
+  --import-unmatched \
+  --yes
+```
+
+**What happens:**
+1. After generating the matching report, unmatched documents are identified
+2. A `Candidate` is built for each unmatched document using its `gs_uri` (or `regulations/{workspace_id}/{filename}` as fallback)
+3. GCS existence is verified via `check_gcs_existence`
+4. Documents with valid GCS URIs are imported via `import_rag_files`
+5. `rag_file_name` is linked via `set_rag_file_name` in batches of 200
+6. Document status is set to `INDEXED` via `update_document_status` in batches of 200
+7. Operation report is written to `assets/document_rag_file_report_unmatched_report.csv`
+
+**Output files:**
+- `assets/document_rag_file_report_unmatched.csv` — pre-import list of unmatched documents with GCS status
+- `assets/document_rag_file_report_unmatched_report.csv` — post-import operation results
+
+---
+
 ## Step 5: Verification
 
 After completing the batch updates, verify that all `rag_file_name` values were properly set.
@@ -230,12 +275,18 @@ uv run rag-document-fetch-data --config assets/mcp_config.json
 # 2. Open the initial report
 open assets/document_rag_file_report.html
 
-# 3. Review the report and run batch updates from the generated CSV
-uv run rag-document-batch-update
+# 3. Review the report and run batch updates for Empty/Null and Different items
+uv run rag-document-batch-update \
   --config assets/mcp_config.json \
   --csv assets/document_rag_file_report.csv
 
-# 4. Re-fetch to verify updates and generate verification report
+# 3b. Import unmatched documents (those with no RAG file in corpus)
+uv run rag-document-fetch-data \
+  --config assets/mcp_config.json \
+  --import-unmatched \
+  --yes
+
+# 4. Re-fetch to verify all updates and generate verification report
 uv run rag-document-fetch-data \
   --config assets/mcp_config.json \
   --output assets/document_rag_file_report_verification.html
@@ -256,3 +307,5 @@ open assets/document_rag_file_report_verification.html
 4. The HTML report is designed for Gmail compatibility — use inline CSS and table-based layouts.
 5. Batch resolution should use the `entries` array in `set_rag_file_name` with a batch size of **200** for optimal efficiency.
 6. Save all MCP tool responses in `assets/` to facilitate reuse and avoid redundant API calls.
+7. **Unmatched documents** (no RAG file in corpus) can be imported via `--import-unmatched`, which reuses the same pipeline as `rag-import-regulations` — GCS check, import, link, and status update.
+8. The `--yes` flag skips interactive confirmation for both unmatched import and batch updates when running non-interactively.

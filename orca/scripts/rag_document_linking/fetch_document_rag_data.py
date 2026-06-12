@@ -4,14 +4,20 @@
 Fetches corpus list, RAG files, workspace/repository IDs, and documents, then
 runs generate_document_rag_file_report.py to produce the HTML and CSV outputs.
 
+Optionally imports unmatched documents (those with no corresponding RAG file)
+into the RAG corpus via --import-unmatched.
+
 Usage:
     python3 fetch_document_rag_data.py --config <mcp_config.json>
                                        [--corpus-display-name <name>]
                                        [--output <report.html>]
+                                       [--import-unmatched]
+                                       [--yes]
 """
 
 import argparse
 import asyncio
+import csv
 import json
 import subprocess
 import sys
@@ -20,6 +26,16 @@ from pathlib import Path
 import httpx
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
 from scripts.common.utils import load_mcp_config
+from scripts.rag_import_regulations.include_regulations import (
+    Candidate,
+    check_gcs_existence,
+    import_documents,
+    update_rag_file_names,
+    update_document_statuses,
+    save_progress,
+    _default_progress,
+    generate_csv_report,
+)
 
 
 ASSETS_DIR = Path("assets")
@@ -28,6 +44,72 @@ DOCUMENTS_FILE = ASSETS_DIR / "documents.json"
 DEFAULT_OUTPUT = ASSETS_DIR / "document_rag_file_report.html"
 DEFAULT_CORPUS_DISPLAY_NAME = "prod-s30-w1-r6-happy-quartz"
 GENERATE_SCRIPT = Path("scripts/rag_document_linking/generate_document_rag_file_report.py")
+UNMATCHED_CSV = ASSETS_DIR / "document_rag_file_report_unmatched.csv"
+UNMATCHED_REPORT_CSV = ASSETS_DIR / "document_rag_file_report_unmatched_report.csv"
+
+
+def find_unmatched_documents(documents: list[dict], rag_files: list[dict]) -> list[dict]:
+    """Identify documents with no matching RAG file in the corpus.
+
+    Returns list of documents where filename has no corresponding RAG displayName.
+    """
+    rag_display_names = set()
+    for rf in rag_files:
+        display_name = rf.get("displayName", "")
+        if display_name:
+            rag_display_names.add(display_name)
+
+    unmatched = []
+    for doc in documents:
+        filename = doc.get("filename", "")
+        if not filename:
+            continue
+        if filename not in rag_display_names:
+            unmatched.append(doc)
+
+    return unmatched
+
+
+def build_candidates_from_documents(documents: list[dict], workspace_id: int) -> list[Candidate]:
+    """Build Candidate objects from unmatched documents for import."""
+    candidates = []
+    for doc in documents:
+        doc_id = doc.get("id") or doc.get("document_id")
+        filename = doc.get("filename", "")
+        gs_uri = doc.get("gs_uri") or doc.get("gsUri") or f"regulations/{workspace_id}/{filename}"
+
+        candidates.append(Candidate(
+            regulation_id=-1,  # Not regulation-linked
+            regulation_short_title="",
+            jurisdiction_code="",
+            filename=filename,
+            document_id=doc_id,
+            gs_uri=gs_uri,
+            already_imported=False,
+        ))
+
+    return candidates
+
+
+def generate_unmatched_csv(candidates: list[Candidate], output_path: Path) -> None:
+    """Write a CSV containing unmatched documents pending import."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "document_id", "filename", "gs_uri", "gcs_exists", "error",
+        ])
+        for c in candidates:
+            writer.writerow([
+                c.document_id if c.document_id != -1 else "",
+                c.filename,
+                c.gs_uri,
+                "yes" if c.gcs_exists else "no",
+                c.error,
+            ])
+
+    print(f"Unmatched documents CSV saved to {output_path} ({len(candidates)} rows)")
 
 
 async def fetch_all(config, corpus_display_name):
@@ -101,7 +183,7 @@ async def fetch_all(config, corpus_display_name):
         documents = doc_content.get("documents", [])
         print(f"Fetched {len(documents)} documents")
 
-        return rag_files, documents, rag_content, doc_content
+        return rag_files, documents, rag_content, doc_content, corpus_name, workspace_id, repository_id
 
 
 async def async_main():
@@ -110,12 +192,16 @@ async def async_main():
     parser.add_argument("--corpus-display-name", default=DEFAULT_CORPUS_DISPLAY_NAME,
                         help=f"Corpus display name (default: {DEFAULT_CORPUS_DISPLAY_NAME})")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Output HTML file path")
+    parser.add_argument("--import-unmatched", action="store_true",
+                        help="Import unmatched documents into the RAG corpus after report generation")
+    parser.add_argument("--yes", action="store_true",
+                        help="Skip the interactive confirmation prompt for unmatched import (used by agents after getting user approval)")
     args = parser.parse_args()
 
     config = load_mcp_config(args.config)
     print(f"Config loaded (URL: {config.get('url')})")
 
-    rag_files, documents, rag_content, doc_content = await fetch_all(config, args.corpus_display_name)
+    rag_files, documents, rag_content, doc_content, corpus_name, workspace_id, repository_id = await fetch_all(config, args.corpus_display_name)
 
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     RAG_FILES_FILE.write_text(json.dumps(rag_content, indent=2))
@@ -133,6 +219,93 @@ async def async_main():
         raise SystemExit(result.returncode)
 
     print(f"\nDone. Report saved to {args.output}")
+
+    # --- Unmatched document import flow ---
+    unmatched_docs = find_unmatched_documents(documents, rag_files)
+
+    if not unmatched_docs:
+        print("\nNo unmatched documents found. All documents have corresponding RAG files.")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"UNMATCHED DOCUMENTS: {len(unmatched_docs)}")
+    print(f"{'='*60}")
+    for doc in unmatched_docs:
+        doc_id = doc.get("id") or doc.get("document_id")
+        filename = doc.get("filename", "")
+        print(f"  document_id={doc_id}  filename={filename}")
+    print(f"{'='*60}")
+
+    if not args.import_unmatched:
+        print("\nTo import these unmatched documents into the RAG corpus, re-run with:")
+        print(f"  uv run rag-document-fetch-data --config {args.config} --import-unmatched")
+        return
+
+    # Build candidates from unmatched documents
+    candidates = build_candidates_from_documents(unmatched_docs, workspace_id)
+    generate_unmatched_csv(candidates, UNMATCHED_CSV)
+
+    if not args.yes:
+        try:
+            response = input(f"\nImport {len(candidates)} unmatched document(s) into RAG? [y/N]: ").strip().lower()
+        except (EOFError, OSError):
+            print("Non-interactive mode detected. Use --yes to skip confirmation.")
+            raise SystemExit(1)
+        if response not in ("y", "yes"):
+            print("Aborted by user.")
+            return
+
+    print("\nProceeding with unmatched document import...")
+
+    progress = _default_progress()
+    progress["corpus_display_name"] = args.corpus_display_name
+    progress["workspace_id"] = workspace_id
+    progress["repository_id"] = repository_id
+    progress["corpus_name"] = corpus_name
+    save_progress(progress)
+
+    async with get_mcp_session(config) as session:
+        # Check GCS existence
+        candidates = await check_gcs_existence(session, candidates)
+
+        # Report non-importable candidates
+        non_importable = [c for c in candidates if not c.gcs_exists]
+        if non_importable:
+            print(f"\n{len(non_importable)} document(s) skipped (GCS URI not found):")
+            for c in non_importable:
+                print(f"  {c.filename}: {c.error}")
+
+        importable = [c for c in candidates if c.gcs_exists]
+        if not importable:
+            print("\nNo unmatched documents have valid GCS URIs. Nothing to import.")
+            generate_csv_report(candidates, UNMATCHED_REPORT_CSV)
+            return
+
+        # Import to RAG
+        candidates = await import_documents(session, corpus_name, candidates)
+
+        # Update rag_file_name
+        candidates = await update_rag_file_names(session, workspace_id, candidates, progress)
+
+        # Update document status to INDEXED
+        candidates = await update_document_statuses(session, workspace_id, candidates, progress)
+
+        # Generate operation report
+        generate_csv_report(candidates, UNMATCHED_REPORT_CSV)
+
+    imported_count = sum(1 for c in candidates if c.imported)
+    failed_count = sum(1 for c in candidates if c.error)
+    print(f"\n{'='*60}")
+    print(f"UNMATCHED IMPORT COMPLETE")
+    print(f"{'='*60}")
+    print(f"Total unmatched:    {len(candidates)}")
+    print(f"Imported to RAG:    {imported_count}")
+    print(f"Failed:             {failed_count}")
+    print(f"Report:             {UNMATCHED_REPORT_CSV}")
+    print(f"{'='*60}")
+
+    print(f"\nRe-run the report to verify all documents are now matched:")
+    print(f"  uv run rag-document-fetch-data --config {args.config}")
 
 
 def main():
