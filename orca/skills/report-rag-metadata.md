@@ -45,16 +45,37 @@ uv run rag-metadata-report --config assets/mcp_config.json
 
 # Force refresh from MCP (ignore cache)
 uv run rag-metadata-report --config assets/mcp_config.json --force-refresh
+
+# Target a specific document list (e.g., retry missing-only from a previous run)
+uv run rag-metadata-report --config assets/mcp_config.json \
+  --documents-file assets/missing_jurisdiction_documents.json --force-refresh
 ```
 
 The script will:
-1. Load the list of documents from `assets/compliance_documents.json`.
+1. Load the list of documents from `assets/compliance_documents.json` (or a custom file via `--documents-file`).
 2. Connect to the Orca MCP server.
 3. **Check Firestore cache** for each document's metadata (unless `--force-refresh` is used).
 4. Fetch missing metadata from MCP in parallel (concurrency limit: 3).
 5. **Cache fetched metadata in Firestore** for future use.
 6. Generate `assets/rag_metadata_report.csv` with detailed metadata.
 7. Generate `assets/rag_metadata_summary.html` with a visual summary.
+8. Export `assets/missing_jurisdiction_documents.json` with the full records of documents that are missing `jurisdiction_code` metadata.
+
+### Step 4: Retry Missing Jurisdiction Documents (Optional)
+
+After the report completes, check the summary. If any documents are missing jurisdiction metadata, **prompt the user**:
+
+> "The report found N documents missing jurisdiction metadata. The file `assets/missing_jurisdiction_documents.json` has been saved. Would you like to re-run the report with `--force-refresh` on just those documents to retry fetching their metadata?"
+
+If the user agrees, run:
+
+```bash
+cd orca
+uv run rag-metadata-report --config assets/mcp_config.json \
+  --documents-file assets/missing_jurisdiction_documents.json --force-refresh
+```
+
+This loads only the missing documents and fetches fresh metadata from MCP, bypassing the cache.
 
 ## Output Files
 
@@ -74,6 +95,9 @@ A professional, Gmail-compatible HTML report containing:
 - **Summary Metrics**: Total documents, count with jurisdiction metadata, and count without.
 - **Jurisdiction Distribution**: A table showing the number of documents grouped by their `jurisdiction_code`.
 - **Missing Metadata List**: A list of filenames that do not have a `jurisdiction_code` metadata entry.
+
+### 3. Missing Documents JSON (`missing_jurisdiction_documents.json`)
+Contains the full document records (same shape as `compliance_documents.json`) for documents that have no `jurisdiction_code` metadata. Can be passed to `--documents-file` on a subsequent run to retry only those documents.
 
 ## Implementation Details
 

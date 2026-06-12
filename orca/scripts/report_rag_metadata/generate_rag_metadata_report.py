@@ -11,6 +11,7 @@ Uses Firestore cache to avoid expensive individual API calls when data is alread
 import argparse
 import asyncio
 import csv
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,6 +25,7 @@ REPOSITORY_ID = 6
 DOCUMENTS_FILE = Path("assets/compliance_documents.json")
 CSV_OUTPUT = Path("assets/rag_metadata_report.csv")
 HTML_OUTPUT = Path("assets/rag_metadata_summary.html")
+MISSING_DOCS_OUTPUT = Path("assets/missing_jurisdiction_documents.json")
 CONCURRENCY_LIMIT = 3
 PROGRESS_LOCK = asyncio.Lock()
 PROGRESS_COUNTER = 0
@@ -367,18 +369,42 @@ def generate_html(results):
         f.write(html)
     
     print(f"Summary HTML written to {HTML_OUTPUT}", flush=True)
+    return missing_jurisdiction
+
+
+def export_missing_documents(missing_filenames: list[str], documents: list[dict]) -> None:
+    """Write documents missing jurisdiction_code to a JSON file for targeted re-runs.
+
+    The output file has the same shape as compliance_documents.json so it can be
+    passed directly via --documents-file on a subsequent run.
+    """
+    missing_set = set(missing_filenames)
+    missing_docs = [doc for doc in documents if doc.get("filename") in missing_set]
+
+    with open(MISSING_DOCS_OUTPUT, "w") as f:
+        json.dump({"documents": missing_docs}, f, indent=2)
+
+    print(
+        f"Saved {len(missing_docs)} documents missing jurisdiction to {MISSING_DOCS_OUTPUT}",
+        flush=True,
+    )
 
 
 async def main():
     parser = argparse.ArgumentParser(description="Generate RAG metadata report")
     parser.add_argument("--config", required=True, help="Path to MCP config JSON")
     parser.add_argument("--force-refresh", action="store_true", help="Force refresh from MCP, ignore cache")
+    parser.add_argument(
+        "--documents-file",
+        default=None,
+        help="Path to documents JSON (defaults to assets/compliance_documents.json)",
+    )
     args = parser.parse_args()
 
     config = load_mcp_config(args.config)
     print(f"Config loaded (URL: {config.get('url')})", flush=True)
 
-    documents = load_documents()
+    documents = load_documents(args.documents_file)
     print(f"Loaded {len(documents)} documents", flush=True)
 
     try:
@@ -436,7 +462,8 @@ async def main():
         firestore_client.close()
 
     generate_csv(results)
-    generate_html(results)
+    missing_filenames = generate_html(results)
+    export_missing_documents(missing_filenames, documents)
     print("Done.", flush=True)
 
 
