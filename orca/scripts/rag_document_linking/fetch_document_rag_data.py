@@ -25,7 +25,7 @@ from pathlib import Path
 
 import httpx
 from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
-from scripts.common.utils import load_mcp_config
+from scripts.common.utils import load_mcp_config, fetch_workspaces, fetch_repositories, fetch_documents as fetch_documents_from_mcp
 from scripts.rag_import_regulations.include_regulations import (
     Candidate,
     check_gcs_existence,
@@ -144,9 +144,7 @@ async def fetch_all(config, corpus_display_name):
 
         # Step 3: Find workspace and repository matching the corpus
         print("Fetching workspaces...")
-        result = await session.call_tool("list_workspaces", {})
-        ws_content = _parse_content(result)
-        workspaces = ws_content.get("workspaces", [])
+        workspaces = await fetch_workspaces(session)
 
         # Extract corpus ID for matching (last segment of the resource name)
         corpus_id = corpus_name.split('/')[-1] if '/' in corpus_name else corpus_name
@@ -157,9 +155,7 @@ async def fetch_all(config, corpus_display_name):
         for ws in workspaces:
             ws_id = ws.get("id") or ws.get("workspace_id")
             print(f"  Checking workspace {ws_id}...")
-            result = await session.call_tool("list_repositories", {"workspaceId": ws_id})
-            repo_content = _parse_content(result)
-            repos = repo_content.get("repositories", [])
+            repos = await fetch_repositories(session, ws_id)
             for repo in repos:
                 repo_corpus = repo.get("corpus_name", "")
                 # Match by corpus ID (last segment) to handle different project ID formats
@@ -178,13 +174,7 @@ async def fetch_all(config, corpus_display_name):
 
         # Step 4: Fetch documents
         print(f"Fetching documents (workspace={workspace_id}, repo={repository_id})...")
-        result = await session.call_tool("list_documents", {
-            "workspaceId": workspace_id,
-            "repositoryId": repository_id,
-            "limit": 2**31 - 1,
-        })
-        doc_content = _parse_content(result)
-        documents = doc_content.get("documents", [])
+        documents, doc_content = await fetch_documents_from_mcp(session, workspace_id, repository_id)
         print(f"Fetched {len(documents)} documents")
 
         return rag_files, documents, rag_content, doc_content, corpus_name, workspace_id, repository_id

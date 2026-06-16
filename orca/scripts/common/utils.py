@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from scripts.common.tools.mcp_wrapper_base import _parse_content
+
 
 COMPLIANCE_DOCUMENTS_FILE = Path("assets/compliance_documents.json")
 
@@ -53,3 +55,36 @@ def load_documents(documents_file: str | Path | None = None) -> list[dict]:
     if "response" in data and "data" in data["response"]:
         return data["response"]["data"].get("documents", [])
     return data.get("documents", [])
+
+
+# ---------------------------------------------------------------------------
+# Reusable async MCP-fetching helpers
+# ---------------------------------------------------------------------------
+
+async def fetch_workspaces(session) -> list[dict]:
+    """Call list_workspaces via the MCP session and return the workspaces list."""
+    result = await session.call_tool("list_workspaces", {})
+    content = _parse_content(result)
+    return content.get("workspaces", [])
+
+
+async def fetch_repositories(session, workspace_id: int) -> list[dict]:
+    """Call list_repositories for a given workspace and return the repositories list."""
+    result = await session.call_tool("list_repositories", {"workspaceId": workspace_id})
+    content = _parse_content(result)
+    return content.get("repositories", [])
+
+
+async def fetch_documents(session, workspace_id: int, repository_id: int) -> tuple[list[dict], dict]:
+    """Call list_documents and return (documents_list, raw_response_dict).
+
+    Uses limit=2**31-1 to fetch all documents.
+    """
+    result = await session.call_tool("list_documents", {
+        "workspaceId": workspace_id,
+        "repositoryId": repository_id,
+        "limit": 2**31 - 1,
+    })
+    content = _parse_content(result)
+    documents = content.get("documents", [])
+    return documents, content

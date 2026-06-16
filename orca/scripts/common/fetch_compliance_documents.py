@@ -13,8 +13,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from scripts.common.tools.mcp_wrapper_base import get_mcp_session, _parse_content
-from scripts.common.utils import load_mcp_config
+from scripts.common.tools.mcp_wrapper_base import get_mcp_session
+from scripts.common.utils import load_mcp_config, fetch_documents as fetch_documents_from_mcp
 
 
 ASSETS_DIR = Path("assets")
@@ -27,13 +27,7 @@ async def fetch_documents(config):
     """Fetch all documents from the compliance repository."""
     async with get_mcp_session(config) as session:
         print(f"Fetching documents from workspace {WORKSPACE_ID}, repository {REPOSITORY_ID}...")
-        result = await session.call_tool("list_documents", {
-            "workspaceId": WORKSPACE_ID,
-            "repositoryId": REPOSITORY_ID,
-            "limit": 2**31 - 1,
-        })
-        doc_content = _parse_content(result)
-        documents = doc_content.get("documents", [])
+        documents, doc_content = await fetch_documents_from_mcp(session, WORKSPACE_ID, REPOSITORY_ID)
         print(f"Fetched {len(documents)} documents")
         return doc_content
 
