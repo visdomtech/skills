@@ -15,13 +15,94 @@ All MCP communication is handled via `scripts/common/tools/mcp_wrapper_base.py`.
 - The metadata `key` and the desired `value` (string, integer, float, or boolean)
 - **Firestore Access**: Google Cloud credentials configured for the `regulations` database in project `visdomapp-1` to update the `rag_metadata_cache` collection.
 
-## Workflow
+## Pipeline
 
-### Step 1: Check Existing State (`list_rag_metadata`)
+### Step 1: Run the Upsert Script
 
-First, determine if the metadata entry already exists for the given RAG file.
+The script at `scripts/rag_metadata_upsert/upsert_rag_metadata.py` automates the full check-act-verify-sync workflow in a single command.
 
-Call `mcp__orca__list_rag_metadata` with the `ragFileName`.
+```bash
+# Prepare virtual environment
+cd orca
+uv sync
+
+# Basic upsert (with Firestore cache sync)
+uv run rag-metadata-upsert \
+  --config assets/mcp_config.json \
+  --rag-file projects/360095844563/locations/us-east4/ragCorpora/3419358017081049088/ragFiles/5702363560879151916 \
+  --key jurisdiction_code \
+  --value US
+
+# Upsert with explicit filename for cache sync
+uv run rag-metadata-upsert \
+  --config assets/mcp_config.json \
+  --rag-file projects/.../ragFiles/... \
+  --key jurisdiction_code \
+  --value US-CA \
+  --filename "29 CFR Part 100-700.pdf"
+
+# Skip Firestore cache sync
+uv run rag-metadata-upsert \
+  --config assets/mcp_config.json \
+  --rag-file projects/.../ragFiles/... \
+  --key jurisdiction_code \
+  --value US \
+  --no-cache-sync
+```
+
+**Arguments:**
+- `--config` (required): Path to MCP config JSON
+- `--rag-file` (required): Full RAG file resource name
+- `--key` (required): Metadata key (e.g., `jurisdiction_code`)
+- `--value` (required): Metadata value — the script auto-detects the type:
+  - `true`/`false` → boolean (`valueBool`)
+  - Numeric integers → integer (`valueInt`)
+  - Numeric floats → float (`valueFloat`)
+  - Everything else → string (`valueStr`)
+- `--filename` (optional): Document filename for Firestore cache key. If omitted, the script looks it up from `assets/rag_files.json` by matching the RAG file name.
+- `--no-cache-sync` (optional): Skip Firestore cache synchronization after upsert.
+
+**What happens:**
+1. **Check**: Calls `list_rag_metadata` to see if the key already exists.
+   - If the value already matches, exits early ("Nothing to do").
+2. **Act**: Calls `create_rag_metadata` (key doesn't exist) or `update_rag_metadata` (key exists, value differs).
+3. **Verify**: Calls `list_rag_metadata` again to confirm the change. Fails with exit code 1 if verification fails.
+4. **Sync Firestore cache**: Updates the `rag_metadata_cache` collection to keep it consistent with Vertex AI.
+
+### Step 2: Review Output
+
+Example output:
+
+```
+Config loaded (URL: https://orcaservices-360095844563.us-central1.run.app)
+Target: projects/.../ragFiles/5702363560879151916
+Key:    jurisdiction_code
+Value:  US (valueStr)
+
+Step 1: Checking existing metadata...
+  Found existing: jurisdiction_code=US-PR
+
+Step 2: Updating metadata entry (US-PR -> US)...
+
+Step 3: Verifying...
+  VERIFIED: jurisdiction_code=US
+
+Step 4: Syncing Firestore cache...
+  Cache: jurisdiction_code US-PR -> US
+  Firestore cache synced for '29 CFR Part 100-700.pdf'
+
+Done.
+```
+
+---
+
+## Manual Workflow (Reference)
+
+If you need to call the MCP tools individually instead of using the script:
+
+### Manual Step 1: Check Existing State (`list_rag_metadata`)
+
+Call `list_rag_metadata` with the `ragFileName`.
 
 **Example:**
 ```json
@@ -36,16 +117,9 @@ Call `mcp__orca__list_rag_metadata` with the `ragFileName`.
 - If found, note the current `value` and the full `name` (resource path) of the metadata entry.
 - If not found, you will need to use `create_rag_metadata`.
 
-### Step 2: Act (`create_rag_metadata` or `update_rag_metadata`)
-
-Choose the appropriate tool based on Step 1:
+### Manual Step 2: Act (`create_rag_metadata` or `update_rag_metadata`)
 
 #### Case A: Entry does not exist → Use `create_rag_metadata`
-Call `mcp__orca__create_rag_metadata` with:
-- `ragFileName`: The RAG file resource name.
-- `entries`: An array containing one object with `key` and the appropriate value field (e.g., `valueStr`, `valueInt`).
-
-**Example:**
 ```json
 {
   "ragFileName": "projects/.../ragFiles/...",
@@ -59,12 +133,6 @@ Call `mcp__orca__create_rag_metadata` with:
 ```
 
 #### Case B: Entry exists → Use `update_rag_metadata`
-Call `mcp__orca__update_rag_metadata` with:
-- `name`: The full resource name of the metadata entry (from Step 1).
-- `key`: The metadata key.
-- The appropriate value field (e.g., `valueStr`).
-
-**Example:**
 ```json
 {
   "name": "projects/.../ragFiles/.../ragMetadata/jurisdiction_code",
@@ -73,72 +141,24 @@ Call `mcp__orca__update_rag_metadata` with:
 }
 ```
 
-### Step 3: Verify (`list_rag_metadata` again)
+### Manual Step 3: Verify (`list_rag_metadata` again)
 
 Always verify that the change was applied successfully, especially because some Orca MCP tools may return "INTERNAL" errors even when the operation succeeds (false negatives).
 
-Call `mcp__orca__list_rag_metadata` again with the same `ragFileName`.
+### Manual Step 4: Sync Firestore Cache
 
-**Verification Logic:**
-1. Check if the metadata entry now exists.
-2. Confirm that the `value` matches the expected value you intended to set.
-3. If the value matches, the upsert is complete.
-4. If the value does not match or the entry is missing, report the failure and suggest retrying.
-
-### Step 4: Sync Firestore Cache
-
-After successfully verifying the metadata change in Vertex AI, synchronize the `rag_metadata_cache` collection in Firestore to ensure consistency with future reports.
-
-1. **Identify the Document**: The cache document ID is the `filename` associated with the RAG file.
-2. **Fetch Current Cache State**: Call `get_rag_metadata` from `scripts/common/firestore_utils.py` using the filename.
-3. **Update Metadata**: 
-   - If the metadata entry exists in the cached list, update its value.
-   - If it doesn't exist, append a new entry `{"key": "your_key", "value": "your_value"}` to the `metadata` array.
-4. **Save to Firestore**: Call `save_rag_metadata` with the updated metadata list.
-
-**Python Example for Cache Sync:**
-```python
-from scripts.common.firestore_utils import get_firestore_client, get_rag_metadata, save_rag_metadata
-import asyncio
-
-async def sync_cache(filename, rag_file_name, key, new_value):
-    client = get_firestore_client()
-    try:
-        # Get existing cache
-        cached = await get_rag_metadata(client, filename)
-        metadata = cached["metadata"] if cached else []
-        
-        # Update or add the key
-        updated = False
-        for entry in metadata:
-            if entry.get("key") == key:
-                entry["value"] = new_value
-                updated = True
-                break
-        
-        if not updated:
-            metadata.append({"key": key, "value": new_value})
-            
-        # Save back to Firestore
-        await save_rag_metadata(
-            client=client,
-            rag_file_name=rag_file_name,
-            filename=filename,
-            metadata=metadata
-        )
-    finally:
-        client.close()
-
-# Usage
-# asyncio.run(sync_cache("my_doc.pdf", "projects/...", "jurisdiction_code", "US-CA"))
-```
+Use the `sync_cache` pattern from `scripts/common/firestore_utils.py`:
+- Fetch existing cache via `get_rag_metadata`
+- Update or append the metadata entry
+- Save via `save_rag_metadata`
 
 ## Important Notes
 
-1. **Value Types:** Ensure you use the correct value field for the data type:
+1. **Value Types:** The script auto-detects value types. When calling tools manually, use the correct value field:
    - Strings: `valueStr`
    - Integers: `valueInt`
    - Floats: `valueFloat`
    - Booleans: `valueBool`
-2. **False Negatives:** If `create` or `update` returns an error containing "INTERNAL", do not assume failure. Always proceed to Step 3 (Verification) to check the actual state in Firestore/The database.
+2. **False Negatives:** If `create` or `update` returns an error containing "INTERNAL", do not assume failure. Always proceed to Step 3 (Verification) to check the actual state.
 3. **Resource Names:** `update_rag_metadata` requires the specific metadata resource `name`, not just the `ragFileName`. Always get this from the `list` call.
+4. **Filename lookup:** The script attempts to resolve the document filename from `assets/rag_files.json` for Firestore cache sync. If this file is stale or missing, use `--filename` explicitly.
