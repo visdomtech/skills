@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dev Cycle"
+  short_description: "Plan-implement-review-simplify pipeline"
+  default_prompt: "Use $dev-cycle to deliver this change through the full plan, implement, review, simplify pipeline."
