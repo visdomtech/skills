@@ -1,0 +1,51 @@
+version: '3'
+
+tasks:
+  sync:
+    desc: Mirror every tracked skill directory from ~/.agents/skills
+    silent: true
+    cmds:
+      # Pass 1 validates the whole tracked list before any transfer can run, so a
+      # failed run is inert. Pass 2 mirrors each directory on its own.
+      - |
+        set -eu
+        cd '{{.ROOT_DIR}}'
+
+        SRC="$HOME/.agents/skills"
+        # Root directories that are repository bookkeeping, not published skills.
+        # Every other non-hidden top-level directory is mirrored and must exist in
+        # SRC. A future .github/ or tools/ therefore stops the task with a named
+        # error until it is listed here, instead of being synced or deleted.
+        # Entries are space-free and must not name a real skill: the check below
+        # refuses if one does.
+        NON_SKILL='docs'
+
+        [ -d "$SRC" ] || { echo "sync: no source tree at $SRC" >&2; exit 1; }
+
+        for n in $NON_SKILL; do
+          [ ! -d "$SRC/$n" ] || {
+            echo "sync: NON_SKILL lists '$n' but $SRC/$n exists" >&2
+            exit 1
+          }
+        done
+
+        set --
+        for d in */; do
+          [ -d "$d" ] || continue
+          n="${d%/}"
+          case " $NON_SKILL " in *" $n "*) continue ;; esac
+          [ -d "$SRC/$n" ] || {
+            echo "sync: '$n' has no counterpart in $SRC" >&2
+            echo "sync: publish it upstream or add it to NON_SKILL" >&2
+            exit 1
+          }
+          set -- "$@" "$n"
+        done
+
+        [ "$#" -gt 0 ] || { echo 'sync: no tracked skill directory found' >&2; exit 1; }
+
+        for n in "$@"; do
+          # Trailing slashes on both sides copy the contents of the source into the
+          # destination. Without them the directory nests one level deeper.
+          rsync -aci --delete --exclude='.DS_Store' "$SRC/$n/" "$n/"
+        done
