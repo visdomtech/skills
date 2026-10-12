@@ -2,22 +2,19 @@ version: '3'
 
 tasks:
   sync:
-    desc: Mirror every tracked skill directory from ~/.agents/skills
+    desc: Mirror every top-level skill directory from ~/.agents/skills
     silent: true
     cmds:
-      # Pass 1 validates the whole tracked list before any transfer can run, so a
-      # failed run is inert. Pass 2 mirrors each directory on its own.
       - |
         set -eu
-        cd '{{.ROOT_DIR}}'
 
         SRC="$HOME/.agents/skills"
-        # Root directories that are repository bookkeeping, not published skills.
-        # Every other non-hidden top-level directory is mirrored and must exist in
-        # SRC. A future .github/ or tools/ therefore stops the task with a named
-        # error until it is listed here, instead of being synced or deleted.
-        # Entries are space-free and must not name a real skill: the check below
-        # refuses if one does.
+        # Top-level directories that are repository bookkeeping, not published
+        # skills. Every other non-hidden top-level directory is mirrored and must
+        # exist in SRC. A future GitHub or tooling directory therefore stops the
+        # task with a named error until it is listed here, instead of being synced
+        # or deleted. Entries are space-free and must not name a real skill: the
+        # check below refuses if one does.
         NON_SKILL='docs'
 
         [ -d "$SRC" ] || { echo "sync: no source tree at $SRC" >&2; exit 1; }
@@ -29,16 +26,45 @@ tasks:
           }
         done
 
+        # Pass 1 builds and validates the whole list before any transfer can run,
+        # so a rejected pre-flight changes nothing. Pass 2 mirrors one directory at
+        # a time: if an rsync fails there, the directories before it are already
+        # mirrored. Fix the cause and run the task again.
         set --
         for d in */; do
           [ -d "$d" ] || continue
           n="${d%/}"
-          case " $NON_SKILL " in *" $n "*) continue ;; esac
+
+          skip=0
+          for x in $NON_SKILL; do
+            if [ "$x" = "$n" ]; then skip=1; fi
+          done
+          if [ "$skip" = 1 ]; then continue; fi
+
+          case "$n" in
+            -*)
+              echo "sync: refusing a directory name starting with '-': $n" >&2
+              exit 1 ;;
+          esac
+
+          # A symlink at the transfer root would move work outside the repository:
+          # an outgoing link lets --delete prune somewhere else, an incoming one
+          # copies a private tree into a repository that gets pushed.
+          [ ! -L "$n" ] || {
+            echo "sync: '$n' is a symlink, refusing to mirror through it" >&2
+            exit 1
+          }
+          [ ! -L "$SRC/$n" ] || {
+            echo "sync: $SRC/$n is a symlink, refusing to follow it" >&2
+            exit 1
+          }
+
           [ -d "$SRC/$n" ] || {
             echo "sync: '$n' has no counterpart in $SRC" >&2
             echo "sync: publish it upstream or add it to NON_SKILL" >&2
             exit 1
           }
+
           set -- "$@" "$n"
         done
 
@@ -46,6 +72,14 @@ tasks:
 
         for n in "$@"; do
           # Trailing slashes on both sides copy the contents of the source into the
-          # destination. Without them the directory nests one level deeper.
-          rsync -aci --delete --exclude='.DS_Store' "$SRC/$n/" "$n/"
+          # destination. Without them the directory nests one level deeper. -c
+          # compares checksums, so a same-size same-mtime edit is still published.
+          # --delete only ever sees this one directory.
+          if ! out=$(rsync -aci --delete --exclude='.DS_Store' "$SRC/$n/" "$n/" 2>&1); then
+            printf 'sync: rsync failed for %s\n%s\n' "$n" "$out" >&2
+            exit 1
+          fi
+          if [ -n "$out" ]; then
+            printf 'sync: %s\n%s\n' "$n" "$out"
+          fi
         done
