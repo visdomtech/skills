@@ -417,7 +417,7 @@ Run the `dev-cycle` pipeline with autonomous caller context (its Phase 2 embeds 
 | 5 | Any gate failing, iterations left | **LOOP** with gap summary |
 
 **DONE hygiene checks** — all must hold; if any fails, decide LOOP instead, with the failed check as the gap summary's focus:
-- Working tree clean, all work committed
+- Working tree clean of code changes, all implementation work committed (untracked `docs/as-goals/` files are expected and do not block DONE — Key Principle 5)
 - Full test suite green on the final tree state, not only gate-linked evidence
 - No unresolved Critical findings in `review.md` (Warning/Suggestion findings do not block DONE but are listed in the final report)
 
@@ -461,7 +461,7 @@ Run the `dev-cycle` pipeline with autonomous caller context (its Phase 2 embeds 
   - `sha2`: message
 
   ## Working Tree
-  - Status: clean
+  - Status: clean of code changes (`docs/as-goals/` left untracked per Key Principle 5)
   - Branch: [branch name]
 
   ## Unresolved Findings (non-blocking)
@@ -548,6 +548,9 @@ Phase 1 (interview) does NOT count against the 10-iteration budget. The clock st
 ### 4. Shared Exit Criteria
 All roles converge on the same measurable gates. No per-role success metrics that diverge from the user's goal.
 
+### 5. Pipeline Documents Are Not Committed
+Everything under `docs/as-goals/` (goal file, `PROGRESS.md`, agent definitions, gate definitions, iteration artifacts, `DONE.md`, `POST-MORTEM.md`) is pipeline bookkeeping, not product code. Do NOT `git add` or commit these files automatically — not in iteration commits, not in the final DONE commit, not "to be safe". Engineer's conventional commits cover implementation code and tests only. The user decides separately whether to commit, ignore (e.g., via `.gitignore`), or delete the `docs/as-goals/` tree. "Working tree clean" in the DONE hygiene checks means no uncommitted *code* changes; untracked `docs/as-goals/` files do not block DONE.
+
 ## File Structure
 
 ```
@@ -579,6 +582,8 @@ docs/as-goals/
     ├── DONE.md (if all gates pass)
     └── POST-MORTEM.md (if 10 turns exhausted)
 ```
+
+**Commit policy:** None of the files above are committed automatically (Key Principle 5). They are local pipeline state.
 
 ## Error Handling
 
@@ -622,6 +627,7 @@ Role-skill assignments (`multi-agent-planning`, `dev-cycle`, `multi-agent-review
 | DONE on gates alone | DONE also requires the hygiene checks: clean tree, green suite, no unresolved Critical findings (Step 4). |
 | Architect racing ahead | WIP limit of 1 per role (Key Principles) — Architect waits for Engineer to finish current task. |
 | Interview counting against budget | Phase 1 is separate — clock starts after gates are frozen (Key Principles). |
+| Auto-committing pipeline docs | `docs/as-goals/` files are never committed automatically (Key Principle 5) — commits cover implementation code and tests only. |
 
 ## Example
 
@@ -655,4 +661,4 @@ After applying as-goal:
 - [ ] DONE was declared only with all hygiene checks green (clean tree, green suite, no unresolved Critical findings)
 - [ ] Gates remained immutable all run (no softening — Phase 3 rule)
 - [ ] Final outcome (`DONE.md` or `POST-MORTEM.md`) is reflected in `PROGRESS.md`
-- [ ] Working tree clean, all changes committed
+- [ ] Working tree clean of code changes; `docs/as-goals/` files were not committed (Key Principle 5)

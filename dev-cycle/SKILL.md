@@ -59,6 +59,7 @@ Default execution is in the current directory on the current branch.
 ### Exit Gate
 - `$REMOTE` and `$DEFAULT_BRANCH` set; HEAD is at or ahead of `$REMOTE/$DEFAULT_BRANCH`; working tree clean.
 - Complexity classified; model choices confirmed (or single-model fallback noted).
+- Progress tracking file created (see Progress Tracking File section) with header, classification, and Phase 0 marked `done`.
 
 ---
 
@@ -105,6 +106,7 @@ Present the plan to the user **in full**: the complete RCA (in Diagnose-and-Fix 
 - In Diagnose-and-Fix mode: RCA produced and shown to the user in full - evidence-backed root cause, reproduction, and discarded hypotheses.
 - At least 2 alternatives explicitly rejected with rationale.
 - User explicitly approved the plan.
+- Progress file updated: plan approval recorded, Phase 1 marked `done`.
 
 ---
 
@@ -132,6 +134,7 @@ While implementing, self-check against the lenses an external review (`pr-review
 ### Exit Gate
 - All plan tasks implemented; full verification passes: **build, lint, typecheck, and tests** (with race detector where available, e.g. `go test -race ./...`).
 - Commit in-scope changes per Pipeline Rule 4; `git status` clean.
+- Progress file updated: Phase 2 marked `done`, commit SHA recorded.
 
 ---
 
@@ -164,6 +167,7 @@ Categorize findings by severity. Fix all `Critical` and `Required` issues, runni
 - Deep investigation done; all Critical and Required findings resolved; build, lint, typecheck, and tests pass (race detector where available).
 - Deferred-findings list captured for the Phase 5 recap.
 - Commit in-scope changes per Pipeline Rule 4; `git status` clean.
+- Progress file updated: Phase 3 marked `done`, commit SHA and deferred-findings list recorded.
 
 ---
 
@@ -178,13 +182,14 @@ Executed using High-Reasoning Model.
 - All existing tests pass without modification; full verification re-run (build, lint, typecheck, tests) — simplification lands *after* review, so it must re-prove the gates, not just tests.
 - Behavior and public APIs unchanged; if a simplification would alter logic in untested paths, split it into a new cycle instead of forcing it into Phase 4.
 - Commit in-scope changes per Pipeline Rule 4; `git status` clean.
+- Progress file updated: Phase 4 marked `done`, commit SHA recorded.
 
 ---
 
 ## Phase 5: Wrap-Up (Commit & Recap)
 
 ### Steps
-1. **Commit residual changes:** Run `git status --porcelain`. If anything remains after the per-phase commits (e.g., docs, generated files, minor polish), `git add -A` and commit with a Conventional Commit (`docs`/`chore`/`test`/`fix`). If the tree is already clean, skip this commit.
+1. **Commit residual changes:** Run `git status --porcelain`. If anything remains after the per-phase commits (e.g., docs, generated files, minor polish), stage the residual files **by explicit name** and commit with a Conventional Commit (`docs`/`chore`/`test`/`fix`). Never use `git add -A` or `git add .` here - the progress file must stay untracked and out of every commit. If the tree is already clean apart from the progress file, skip this commit.
 2. **Commit type guidance:** Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat`, `fix`, `refactor`, `chore`, `docs`, `test`). Use `fix` for small tweaks/polish; reserve `feat` for major features. Per-phase types are defined in the Per-Phase Commit Gate (Pipeline Rules #4).
 3. **Recap Table:** Present summary including branch, pipeline path, models used, tasks completed, review findings fixed, **deferred findings** (the Phase 3 deferred-findings list: every unresolved `Optional`/`Nit`/`FYI` with a one-line rationale — never let them vanish silently), simplifications, and per-phase commit SHAs (`git log --oneline $REMOTE/$DEFAULT_BRANCH..HEAD`).
 4. **Post-Cycle Choice - Local Review vs. Publish + Online Review:** Present a two-way choice; the user may also decline both and stop. Do NOT execute either path until the user explicitly picks one. State exactly what each option authorizes.
@@ -213,7 +218,47 @@ Executed using High-Reasoning Model.
 ### Exit Gate
 - All changes committed with conventional messages (per-phase commits from Phases 2-4 plus any residual from Step 1); recap delivered.
 - Post-cycle choice presented with an accurate publish pre-flight; the user's chosen path (local review, or publish + PR + online review) executed or explicitly declined. (Under autonomous callers the choice is skipped; recap only.)
+- Progress file finalized: Phase 5 marked `done`, all commit SHAs recorded, then the progress file deleted (never committed - see Cleanup).
 - `git status` clean.
+
+---
+
+## Progress Tracking File (MANDATORY)
+
+Context compaction can erase in-conversation state mid-pipeline. An agent that resumes after compaction can then skip phases, re-run completed work, or invent a plan. To prevent this, every cycle keeps a durable progress file on disk. The file is the single source of truth for cycle state.
+
+### File Naming & Location
+- **Pattern:** `[task-friendly-name]-[yyyy-mm-dd-HH-MM]-progress.md`
+  - `task-friendly-name`: lowercase, hyphenated, 3–6 words (e.g. `fix-auth-token-refresh`).
+  - Timestamp: cycle start time, local, 24-hour clock (e.g. `2026-10-04-14-30`).
+  - Example: `fix-auth-token-refresh-2026-10-04-14-30-progress.md`
+- **Location:** repository root (or the project's established progress-notes directory, if one exists).
+- Create the file in Phase 0, immediately after complexity assessment. Use the same file for the whole cycle. Never create a second progress file mid-cycle.
+- **NEVER commit the progress file.** It is scratch state for the running cycle, not project content. Keep it untracked at all times: never `git add` it, never let it ride into a per-phase commit or the Phase 5 residual commit, and never use `git add -A` / `git add .` while it exists in the tree (stage files by explicit name instead). If the project keeps a permanent progress-notes directory that is intentionally tracked, that directory is the single exception - state it in the Phase 5 recap.
+
+### Required Contents (keep current at all times)
+1. **Header:** task name, cycle start timestamp, branch, `$REMOTE/$DEFAULT_BRANCH` base ref.
+2. **Complexity classification** and chosen path (fast / full / diagnose-and-fix).
+3. **Phase checklist:** one line per phase (0–5) with status `pending` / `in_progress` / `done` and the phase's exit-gate result.
+4. **Current phase** and the next concrete action.
+5. **Key decisions & approvals:** plan approval (or autonomous auto-approval), model allocation, RCA summary (in Diagnose-and-Fix mode).
+6. **Per-phase commit SHAs** as they are created.
+7. **Deferred-findings list** (from Phase 3) and any out-of-phase stashes.
+
+### Update Rules
+- Update the file **before** and **after** every phase transition, and after every commit.
+- Update it immediately after any user approval, plan change, or finding resolution.
+- Keep entries short and factual. One line per event. Append; do not rewrite history.
+
+### Resume After Compaction
+On any resume (compaction, interruption, new session), the agent's **first action** is to read the progress file:
+1. Reconstruct cycle state from the file, not from memory.
+2. Verify the recorded state against the repo (`git log`, `git status`, test results) before acting.
+3. Resume at the first phase whose checklist entry is not `done`. Never re-run a `done` phase unless its verification no longer passes.
+4. If the file is missing or contradicts the repo state, **STOP** and surface the discrepancy to the user. Do not guess.
+
+### Cleanup
+The progress file is **never committed**. At Phase 5, delete it (`rm <progress-file>`) once the recap is delivered - the cycle's durable record lives in the commit history and the recap, not in this file. Exception: if the project has an established, intentionally tracked progress-notes directory, the file may be committed there instead; state which choice applies in the Phase 5 recap.
 
 ---
 
@@ -229,3 +274,4 @@ Executed using High-Reasoning Model.
 
    If a change is out of scope (belongs to a different phase or is unrelated), do **not** commit it under the current phase: stash it (`git stash push -m "out-of-phase: <desc>"`) and surface it to the user. Commit in-scope changes with the matching Conventional Commit type (`feat`/`fix`/`test` for implement, `fix` for review, `refactor` for simplify). Leave the working tree clean (`git status` empty) before advancing to the next phase.
 5. **No branch or worktree creation:** In all cases, never create additional local branches or worktrees. When a step needs a different revision, switch in place with `git reset --hard <revision>` (see Phase 0.1 step 5). The only branch-shaped artifact allowed is the remote-only publish ref in Phase 5 Option B (`git push $REMOTE HEAD:<remote-branch>`), which creates no local branch. Review skills invoked post-cycle (e.g. `multi-agent-review` PR Mode) manage their own review state and are outside this rule.
+6. **Progress tracking file is mandatory:** Every cycle maintains a `[task-friendly-name]-[yyyy-mm-dd-HH-MM]-progress.md` file per the Progress Tracking File section. Create it in Phase 0, update it at every phase transition and commit, and treat it as the resume source of truth after any context compaction or interruption. The file is **never committed** - keep it untracked, stage commits by explicit file name (no `git add -A`/`git add .` while it exists), and delete it at Phase 5 cleanup.

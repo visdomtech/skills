@@ -98,12 +98,23 @@ Resolve the target in this priority order:
    git fetch --force "$REMOTE" "pull/<N>/head"
    git reset --hard "$HEAD_REV"
    ```
-4. **Incremental review — review only changes since the last review.** Check whether this PR already has a review from the current actor (this skill's own prior verdict, posted via `gh pr review`):
+4. **Incremental review — review only changes since the last review.** Detect whether this PR already has a prior verdict from this skill (or `pr-review`). Detection is **account-agnostic and content-verified** — never filter by the current `gh` user, because the review-posting account may differ from the logged-in account (e.g., reviews posted by a bot account while `gh` is logged in as the PR author).
+
+   **Step 4a — Fetch all reviews (no user filter), take the latest:**
    ```
-   gh api repos/{owner}/{repo}/pulls/<N>/reviews --jq '[.[] | select(.user.login == "'"$(gh api user --jq .login)"'")] | last | {id, commit_id, submitted_at}'
+   LATEST_REVIEW=$(gh api repos/{owner}/{repo}/pulls/<N>/reviews --jq '[.[] | {id, user: .user.login, commit_id, submitted_at, state, body}] | last')
    ```
-   - **Prior review exists:** set `REVIEW_BASE` to that review's `commit_id` (the PR head at the time of the last review). Review only the delta `$REVIEW_BASE..$HEAD_REV` — commits pushed since the last review. Verify the delta is non-empty (`git rev-parse "$REVIEW_BASE^{commit}"`; if `$REVIEW_BASE == $HEAD_REV`, report "no new commits since last review" and stop). Still read prior findings (from the last review body) to confirm they were addressed in the delta. Announce: `Incremental review: <REVIEW_BASE>..<HEAD_REV> (N new commits since review <id>)`.
-   - **No prior review:** full review of `$BASE..$HEAD_REV` as before.
+   Always log the candidate found (user, date, state) for transparency, so the agent and user can verify the detection is correct.
+
+   **Step 4b — Verify it is a skill-authored review by checking the body for output signatures:**
+   - `multi-agent-review` signatures: body contains `"Readiness Score:"` AND `"Agents dispatched:"`.
+   - `pr-review` signatures: body contains `"Readiness Score:"` AND (heading `"PR #"` or `"Local Review"`).
+   - If the body matches either skill's output format → this is a prior skill verdict.
+   - If the body does NOT match → this review was authored by a human or another tool; treat as "no prior skill review."
+
+   **Step 4c — Act on the result:**
+   - **Prior skill review found:** set `REVIEW_BASE` to that review's `commit_id` (the PR head at the time of the last review). Review only the delta `$REVIEW_BASE..$HEAD_REV` — commits pushed since the last review. Verify the delta is non-empty (`git rev-parse "$REVIEW_BASE^{commit}"`; if `$REVIEW_BASE == $HEAD_REV`, report "no new commits since last review" and stop). Still read prior findings (from the last review body) to confirm they were addressed in the delta. Announce: `Incremental review: <REVIEW_BASE>..<HEAD_REV> (N new commits since review <id> by <user>)`.
+   - **No prior skill review:** full review of `$BASE..$HEAD_REV` as before.
    - **Escape hatch (`FULL` flag):** if `FULL` is set or the user explicitly asks for a full re-review ("review the whole PR", "full review"), skip the prior-review lookup entirely and use `$BASE..$HEAD_REV`.
 5. Summary: Mode=PR, Remote=$REMOTE, Target=$BASE..$HEAD_REV (or incremental $REVIEW_BASE..$HEAD_REV), Base=$BASE, Head=$HEAD_REV.
 
