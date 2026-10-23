@@ -13,6 +13,18 @@ repository. Run it after you edit a skill upstream.
 task sync
 ```
 
+## External skills repositories
+
+Many skills in this repository are mirrored from external community sources.
+Upstream changes flow in through `~/.agents/skills` and land here via
+`task sync`.
+
+| Source | Path mirrored here |
+|---|---|
+| [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) | `skills/` |
+| [UditAkhourii/adhd](https://github.com/UditAkhourii/adhd) | `skills/` |
+
+
 ## Core workflow skills
 
 | Skill | What it does | Use it when |
