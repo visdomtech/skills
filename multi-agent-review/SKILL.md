@@ -37,8 +37,8 @@ Deep, ultra-thorough code review dispatching **7 specialized review agents** in 
 2. Pre-Flight       (Build verification + test suite — MANDATORY)
 3. Deep Investigation (Full-file reads, dependency graph, usage sites)
 4. Parallel Review  (7 specialized subagents dispatched concurrently)
-5. Synthesize       (Deduplicate, severity-tag, readiness score)
-6. Deliver          (Post to GH or present in chat)
+5. Synthesize       (Deduplicate, severity-tag, readiness score, findings summary)
+6. Deliver          (Save report as <friendly-title>-review-findings.md; post to GH or present in chat)
 7. Fix Findings     (dev-cycle resolves ALL findings)
 8. Re-Review        (Verify fixes; updated readiness score)
 ```
@@ -106,9 +106,10 @@ Resolve the target in this priority order:
    Always log the candidate found (user, date, state) for transparency, so the agent and user can verify the detection is correct.
 
    **Step 4b — Verify it is a skill-authored review by checking the body for output signatures:**
-   - `multi-agent-review` signatures: body contains `"Readiness Score:"` AND `"Agents dispatched:"`.
-   - `pr-review` signatures: body contains `"Readiness Score:"` AND (heading `"PR #"` or `"Local Review"`).
-   - If the body matches either skill's output format → this is a prior skill verdict.
+   - Current format (both skills): body contains `"## Findings Summary"`.
+   - Legacy `multi-agent-review` format: body contains `"Readiness Score:"` AND `"Agents dispatched:"`.
+   - Legacy `pr-review` format: body contains `"Readiness Score:"` AND (heading `"PR #"` or `"Local Review"`).
+   - If the body matches any signature → this is a prior skill verdict.
    - If the body does NOT match → this review was authored by a human or another tool; treat as "no prior skill review."
 
    **Step 4c — Act on the result:**
@@ -263,9 +264,18 @@ Score = max(0, 100 - sum of deductions). The score is an **advisory signal only*
 **Pre-Flight:** build=✅ tests=✅ lint=✅
 **Agents dispatched:** Architect, Logician, Sentinel, Performer, Cartographer, Observer, Tracer
 
+## Findings Summary
+| Severity | Count | Group Risk |
+|----------|-------|------------|
+| Critical | n | [highest risk rating in the group: High/Medium/Low + one-line reason] |
+| Warning | n | ... |
+| Suggestion | n | ... |
+| Nit / FYI | n | ... |
+
 ## Critical Issues (MUST FIX)
 ### [Title]
 [file#Lstart-Lend](path) — *Flagged by: [Agent]*
+**Risk:** [High/Medium/Low — what happens if merged as-is]
 **Problem:** [Description]
 **Fix:** [Concrete solution]
 
@@ -289,9 +299,15 @@ Score = max(0, 100 - sum of deductions). The score is an **advisory signal only*
 
 ## Phase 6: Deliver
 
-- **PR Mode:** `gh pr review <N> --approve/--request-changes --body-file review.md` (always use `--body-file`). Then output a clickable PR link so the user can jump straight to it: `gh pr view <N> --json url --jq .url`.
-- **Local Mode:** Present the formatted review in chat. Do NOT call `gh`. Offer to save to `review-<sha>.md` (or `review-wip.md` for uncommitted changes).
-- **Report files are scratch artifacts:** any `review*.md` written during the review (body files, saved local reports, re-review updates) is intermediate. Never `git add`/commit it — the Phase 7 fix commit must not include it — and delete it once delivered; prefer a temp path (e.g., `mktemp`) for the `--body-file` so the working tree stays clean. A Local Mode save the user explicitly accepted may persist, but stays uncommitted.
+1. **Save the report file:** Always write the detailed report to `<friendly-title>-review-findings.md` in the workspace root (`$WORKTREE`). Derive `<friendly-title>` from the review target — a short kebab-case slug of the PR title (PR Mode) or of the branch/change description (Local Mode), e.g. `oauth-token-refresh-fix-review-findings.md`.
+   - **Update pattern (choose per review size):**
+     - **Single write (default):** write the complete report in one pass, after Phase 5 synthesis is complete.
+     - **Incremental write (very big reviews):** when the diff is Large (>15 files or >500 lines) or 7-agent findings arrive over a long run, create the file early with the title, metadata block, and an empty Findings Summary, then add each confirmed finding to its severity section as soon as Phase 5 validates it. Fill in the summary table, readiness score, and verdict last.
+   - **Re-review (Phase 8):** update the same file in place — mark each prior finding **Fixed** (with fix SHA) or **Still-open** and refresh the summary and readiness score — instead of creating a second report file for the same target.
+   - The report is a deliverable, not a scratch file: never `git add`/commit it (the Phase 7 fix commit must not include it), but keep it in the working tree after delivery.
+2. **Post or present:**
+   - **PR Mode:** post the saved report as the review body: `gh pr review <N> --approve/--request-changes --body-file <friendly-title>-review-findings.md` (always use `--body-file`). Then output a clickable PR link so the user can jump straight to it: `gh pr view <N> --json url --jq .url`.
+   - **Local Mode:** Present the formatted review in chat and point the user to the saved report file. Do NOT call `gh`.
 
 **Next:** No findings at all → done. One or more findings of **ANY** severity → **Phase 7** (mandatory). Even an *Approved* verdict carrying nits/suggestions enters Phase 7 — the verdict is about mergeability, the fix loop is about cleanliness.
 

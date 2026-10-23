@@ -39,7 +39,7 @@ This is the default entry point for review requests. For high-stakes or security
 2. Assess Size     (small ≤3 files & ≤50 lines -> single-pass; else -> 3-agent parallel)
 3. Investigate     (read full files, trace removals, grep usage sites)
 4. Analyze         (parallel subagents or single-pass)
-5. Merge & Deliver (deduplicate, severity tags; post to GH or present in chat; if ANY findings -> Phase 6)
+5. Merge & Deliver (deduplicate, severity tags; save report as <friendly-title>-review-findings.md; post to GH or present in chat; if ANY findings -> Phase 6)
 6. Fix Findings    (dev-cycle fixes ALL findings; PR mode: commit + push to PR branch + re-review; Local mode: commit only)
 7. Re-Review       (verify fixes against prior findings; post updated review to GH or present in chat)
 ```
@@ -107,9 +107,10 @@ Resolve the target in this priority order:
    Always log the candidate found (user, date, state) for transparency, so the agent and user can verify the detection is correct.
 
    **Step 4b — Verify it is a skill-authored review by checking the body for output signatures:**
-   - `multi-agent-review` signatures: body contains `"Readiness Score:"` AND `"Agents dispatched:"`.
-   - `pr-review` signatures: body contains `"Readiness Score:"` AND (heading `"PR #"` or `"Local Review"`).
-   - If the body matches either skill's output format → this is a prior skill verdict.
+   - Current format (both skills): body contains `"## Findings Summary"`.
+   - Legacy `multi-agent-review` format: body contains `"Readiness Score:"` AND `"Agents dispatched:"`.
+   - Legacy `pr-review` format: body contains `"Readiness Score:"` AND (heading `"PR #"` or `"Local Review"`).
+   - If the body matches any signature → this is a prior skill verdict.
    - If the body does NOT match → this review was authored by a human or another tool; treat as "no prior skill review."
 
    **Step 4c — Act on the result:**
@@ -191,9 +192,18 @@ For each transition, trace three things:
 ```markdown
 # PR #<N> Review - [Verdict]   <!-- Local Mode: # Local Review <BASE>..<HEAD_REV> - [Verdict] | # Local Review - Uncommitted Changes - [Verdict] -->
 
+## Findings Summary
+| Severity | Count | Group Risk |
+|----------|-------|------------|
+| Critical | n | [highest risk rating in the group: High/Medium/Low + one-line reason] |
+| Warning | n | ... |
+| Suggestion | n | ... |
+| Nit / FYI | n | ... |
+
 ## Critical Issues (MUST FIX)
 ### [Title]
 [file#Lstart-Lend](path)
+**Risk:** [High/Medium/Low — what happens if merged as-is]
 **Problem:** [Description]
 **Fix:** [Solution/Guidance]
 
@@ -211,11 +221,16 @@ For each transition, trace three things:
 ```
 
 4. **Verdict:** Zero issues -> **Approved**. Nits/FYIs/Suggestions only -> **Approved** (verdict reflects mergeability only). Any Warning or Critical -> **Request Changes**. `multi-agent-review` uses this same severity-driven rule — its readiness score is advisory and never overrides it.
-5. **Deliver:**
-   - **PR Mode:** `gh pr review <N> --approve/--request-changes --body-file review.md` (always use `--body-file`). Then output a clickable PR link so the user can jump straight to it: `gh pr view <N> --json url --jq .url`.
-   - **Local Mode:** Present formatted review in chat. Do NOT call `gh`. Offer to save to `review-<sha>.md` (or `review-wip.md` for uncommitted changes).
-   - **Report files are scratch artifacts:** any `review*.md` written during the review (body files, saved local reports, re-review updates) is intermediate. Never `git add`/commit it — the Phase 6 fix commit must not include it — and delete it once delivered; prefer a temp path (e.g., `mktemp`) for the `--body-file` so the working tree stays clean. A Local Mode save the user explicitly accepted may persist, but stays uncommitted.
-6. **Next phase:** No findings at all -> done. One or more findings of **ANY** severity -> **Phase 6** (mandatory). Even an *Approved* verdict carrying nits/suggestions enters Phase 6 - the verdict is about mergeability, the fix loop is about cleanliness.
+5. **Save the report file:** Always write the detailed report to `<friendly-title>-review-findings.md` in the workspace root (`$WORKTREE`). Derive `<friendly-title>` from the review target — a short kebab-case slug of the PR title (PR Mode) or of the branch/change description (Local Mode), e.g. `oauth-token-refresh-fix-review-findings.md`.
+   - **Update pattern (choose per review size):**
+     - **Single write (default):** write the complete report in one pass, after all findings are gathered, deduplicated, and severity-tagged (steps 1–3).
+     - **Incremental write (very big reviews):** when the diff is Large (>15 files or >500 lines) or findings arrive over a long run, create the file early with the title and an empty Findings Summary, then add each confirmed finding to its severity section as soon as it is validated. Fill in the summary table and verdict last.
+   - **Re-review (Phase 7):** update the same file in place — mark each prior finding **Fixed** (with fix SHA) or **Still-open** and refresh the summary — instead of creating a second report file for the same target.
+   - The report is a deliverable, not a scratch file: never `git add`/commit it (the Phase 6 fix commit must not include it), but keep it in the working tree after delivery.
+6. **Deliver:**
+   - **PR Mode:** post the saved report as the review body: `gh pr review <N> --approve/--request-changes --body-file <friendly-title>-review-findings.md` (always use `--body-file`). Then output a clickable PR link so the user can jump straight to it: `gh pr view <N> --json url --jq .url`.
+   - **Local Mode:** Present the formatted review in chat and point the user to the saved report file. Do NOT call `gh`.
+7. **Next phase:** No findings at all -> done. One or more findings of **ANY** severity -> **Phase 6** (mandatory). Even an *Approved* verdict carrying nits/suggestions enters Phase 6 - the verdict is about mergeability, the fix loop is about cleanliness.
 
 ## Phase 6: Fix Findings (Auto-Fix via dev-cycle)
 
